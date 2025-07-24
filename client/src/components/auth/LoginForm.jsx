@@ -1,12 +1,18 @@
 import { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Droplets } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Droplets } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from '@/hooks/use-toast';
 
 export const LoginForm = ({ onSwitchToRegister }) => {
   const [email, setEmail] = useState('');
@@ -20,20 +26,21 @@ export const LoginForm = ({ onSwitchToRegister }) => {
     setIsLoading(true);
 
     const success = await login(email, password);
-    
+
     if (success) {
       toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
+        title: 'Welcome back!',
+        description: 'You have successfully logged in.',
       });
     } else {
       toast({
-        title: "Login failed",
-        description: "Invalid email or password. Please try again.",
-        variant: "destructive",
+        title: 'Login failed',
+        description:
+          'Invalid email or password, or server error. Please try again.',
+        variant: 'destructive',
       });
     }
-    
+
     setIsLoading(false);
   };
 
@@ -71,18 +78,19 @@ export const LoginForm = ({ onSwitchToRegister }) => {
                 required
               />
             </div>
-            
+
             <Alert>
               <AlertDescription>
-                For development, the app will connect to the backend API. Register a new account or use existing credentials.
+                For development, the app will connect to the backend API.
+                Register a new account or use existing credentials.
               </AlertDescription>
             </Alert>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign In"}
+              {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          
+
           <div className="mt-4 text-center">
             <span className="text-sm text-muted-foreground">
               Don't have an account?{' '}

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '@/lib/api';
 
 const AuthContext = createContext(undefined);
 
@@ -25,54 +26,36 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     setIsLoading(true);
-    
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData.user);
-        localStorage.setItem('tukomaji_user', JSON.stringify(userData.user));
-        localStorage.setItem('tukomaji_token', userData.token);
-        setIsLoading(false);
-        return true;
-      }
+      const response = await api.post('/auth/login', { email, password });
+      const userData = response.data;
+      setUser(userData.user);
+      localStorage.setItem('tukomaji_user', JSON.stringify(userData.user));
+      localStorage.setItem('tukomaji_token', userData.token);
+      setIsLoading(false);
+      return true;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error:', error.message || error);
+      setIsLoading(false);
+      return false;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
   const register = async (userData) => {
     setIsLoading(true);
-    
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        setUser(result.user);
-        localStorage.setItem('tukomaji_user', JSON.stringify(result.user));
-        localStorage.setItem('tukomaji_token', result.token);
-        setIsLoading(false);
-        return true;
-      }
+      const response = await api.post('/auth/register', userData);
+      const result = response.data;
+      setUser(result.user);
+      localStorage.setItem('tukomaji_user', JSON.stringify(result.user));
+      localStorage.setItem('tukomaji_token', result.token);
+      setIsLoading(false);
+      return true;
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Registration error:', error.message || error);
+      setIsLoading(false);
+      return false;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
   const logout = () => {

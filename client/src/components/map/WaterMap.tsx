@@ -1,9 +1,23 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, Droplets, AlertTriangle, CheckCircle, Clock, Users } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  MapPin,
+  Droplets,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Users,
+} from 'lucide-react';
+import api from '@/lib/api';
 
 interface WaterReport {
   id: string;
@@ -17,83 +31,73 @@ interface WaterReport {
   reportedBy: string;
 }
 
-const mockReports: WaterReport[] = [
-  {
-    id: '1',
-    category: 'Water Leakage',
-    description: 'Large water pipe burst on Kenyatta Avenue causing flooding',
-    address: 'Kenyatta Avenue, CBD',
-    coordinates: { lat: -1.2864, lng: 36.8172 },
-    status: 'in-progress',
-    votes: 15,
-    createdAt: '2024-01-20',
-    reportedBy: 'John Doe'
-  },
-  {
-    id: '2',
-    category: 'Water Shortage',
-    description: 'No water supply for 3 days in Eastleigh estate',
-    address: 'Eastleigh, Section 1',
-    coordinates: { lat: -1.2707, lng: 36.8404 },
-    status: 'pending',
-    votes: 8,
-    createdAt: '2024-01-19',
-    reportedBy: 'Jane Smith'
-  },
-  {
-    id: '3',
-    category: 'Illegal Water Connection',
-    description: 'Suspected illegal tap connection in Kibera slums',
-    address: 'Kibera, Nairobi',
-    coordinates: { lat: -1.3133, lng: 36.7814 },
-    status: 'verified',
-    votes: 12,
-    createdAt: '2024-01-18',
-    reportedBy: 'Mike Wilson'
-  },
-  {
-    id: '4',
-    category: 'Broken Pipe',
-    description: 'Water pipe damaged by construction work',
-    address: 'Westlands, Parklands Road',
-    coordinates: { lat: -1.2676, lng: 36.8108 },
-    status: 'resolved',
-    votes: 5,
-    createdAt: '2024-01-17',
-    reportedBy: 'Sarah Johnson'
-  }
-];
-
 export const WaterMap = () => {
-  const [selectedReport, setSelectedReport] = useState<WaterReport | null>(null);
+  const [reports, setReports] = useState<any[]>([]);
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredReports = mockReports.filter(report => {
-    const statusMatch = statusFilter === 'all' || report.status === statusFilter;
-    const categoryMatch = categoryFilter === 'all' || report.category === categoryFilter;
+  useEffect(() => {
+    const fetchReports = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await api.get('/reports?limit=100');
+        setReports(res.data);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load reports');
+      }
+      setLoading(false);
+    };
+    fetchReports();
+  }, []);
+
+  const filteredReports = reports.filter((report) => {
+    const statusMatch =
+      statusFilter === 'all' || report.status === statusFilter;
+    const categoryMatch =
+      categoryFilter === 'all' || report.category === categoryFilter;
     return statusMatch && categoryMatch;
   });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'pending': return <Clock className="h-4 w-4" />;
-      case 'verified': return <Users className="h-4 w-4" />;
-      case 'in-progress': return <AlertTriangle className="h-4 w-4" />;
-      case 'resolved': return <CheckCircle className="h-4 w-4" />;
-      default: return <MapPin className="h-4 w-4" />;
+      case 'pending':
+        return <Clock className="h-4 w-4" />;
+      case 'verified':
+        return <Users className="h-4 w-4" />;
+      case 'in-progress':
+        return <AlertTriangle className="h-4 w-4" />;
+      case 'resolved':
+        return <CheckCircle className="h-4 w-4" />;
+      default:
+        return <MapPin className="h-4 w-4" />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-500';
-      case 'verified': return 'bg-blue-500';
-      case 'in-progress': return 'bg-orange-500';
-      case 'resolved': return 'bg-green-500';
-      default: return 'bg-gray-500';
+      case 'pending':
+        return 'bg-yellow-500';
+      case 'verified':
+        return 'bg-blue-500';
+      case 'in-progress':
+        return 'bg-orange-500';
+      case 'resolved':
+        return 'bg-green-500';
+      default:
+        return 'bg-gray-500';
     }
   };
+
+  if (loading) {
+    return <div className="p-8 text-center">Loading map data...</div>;
+  }
+  if (error) {
+    return <div className="p-8 text-center text-red-500">{error}</div>;
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-4">
@@ -119,16 +123,23 @@ export const WaterMap = () => {
                     <SelectItem value="resolved">Resolved</SelectItem>
                   </SelectContent>
                 </Select>
-                
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+
+                <Select
+                  value={categoryFilter}
+                  onValueChange={setCategoryFilter}
+                >
                   <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="Filter by category" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
                     <SelectItem value="Water Leakage">Water Leakage</SelectItem>
-                    <SelectItem value="Water Shortage">Water Shortage</SelectItem>
-                    <SelectItem value="Illegal Water Connection">Illegal Connection</SelectItem>
+                    <SelectItem value="Water Shortage">
+                      Water Shortage
+                    </SelectItem>
+                    <SelectItem value="Illegal Water Connection">
+                      Illegal Connection
+                    </SelectItem>
                     <SelectItem value="Broken Pipe">Broken Pipe</SelectItem>
                   </SelectContent>
                 </Select>
@@ -141,21 +152,25 @@ export const WaterMap = () => {
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center space-y-2">
                     <MapPin className="h-12 w-12 mx-auto text-primary" />
-                    <p className="text-sm text-muted-foreground">Interactive Map</p>
+                    <p className="text-sm text-muted-foreground">
+                      Interactive Map
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {filteredReports.length} reports shown
                     </p>
                   </div>
                 </div>
-                
+
                 {/* Mock Markers */}
                 {filteredReports.slice(0, 4).map((report, index) => (
                   <div
                     key={report.id}
-                    className={`absolute w-4 h-4 rounded-full ${getStatusColor(report.status)} cursor-pointer transform -translate-x-1/2 -translate-y-1/2 border-2 border-white shadow-lg hover:scale-125 transition-transform`}
+                    className={`absolute w-4 h-4 rounded-full ${getStatusColor(
+                      report.status
+                    )} cursor-pointer transform -translate-x-1/2 -translate-y-1/2 border-2 border-white shadow-lg hover:scale-125 transition-transform`}
                     style={{
                       left: `${20 + index * 20}%`,
-                      top: `${30 + index * 15}%`
+                      top: `${30 + index * 15}%`,
                     }}
                     onClick={() => setSelectedReport(report)}
                     title={report.description}
@@ -181,12 +196,18 @@ export const WaterMap = () => {
                   <div
                     key={report.id}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
-                      selectedReport?.id === report.id ? 'border-primary bg-muted/50' : ''
+                      selectedReport?.id === report.id
+                        ? 'border-primary bg-muted/50'
+                        : ''
                     }`}
                     onClick={() => setSelectedReport(report)}
                   >
                     <div className="flex items-start space-x-2">
-                      <div className={`w-3 h-3 rounded-full ${getStatusColor(report.status)} mt-1.5`} />
+                      <div
+                        className={`w-3 h-3 rounded-full ${getStatusColor(
+                          report.status
+                        )} mt-1.5`}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2 mb-1">
                           <Badge variant="outline" className="text-xs">
@@ -194,13 +215,21 @@ export const WaterMap = () => {
                           </Badge>
                           <div className="flex items-center space-x-1 text-xs text-muted-foreground">
                             {getStatusIcon(report.status)}
-                            <span className="capitalize">{report.status.replace('-', ' ')}</span>
+                            <span className="capitalize">
+                              {report.status.replace('-', ' ')}
+                            </span>
                           </div>
                         </div>
-                        <p className="text-sm font-medium truncate">{report.description}</p>
-                        <p className="text-xs text-muted-foreground">{report.address}</p>
+                        <p className="text-sm font-medium truncate">
+                          {report.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {report.address}
+                        </p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-xs text-muted-foreground">{report.createdAt}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {report.createdAt}
+                          </span>
                           <div className="flex items-center space-x-1">
                             <Users className="h-3 w-3" />
                             <span className="text-xs">{report.votes}</span>
@@ -225,20 +254,28 @@ export const WaterMap = () => {
                     <Badge variant="outline">{selectedReport.category}</Badge>
                     <div className="flex items-center space-x-2 mt-2">
                       {getStatusIcon(selectedReport.status)}
-                      <span className="capitalize text-sm">{selectedReport.status.replace('-', ' ')}</span>
+                      <span className="capitalize text-sm">
+                        {selectedReport.status.replace('-', ' ')}
+                      </span>
                     </div>
                   </div>
                   <div>
                     <h4 className="font-medium">Description</h4>
-                    <p className="text-sm text-muted-foreground">{selectedReport.description}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedReport.description}
+                    </p>
                   </div>
                   <div>
                     <h4 className="font-medium">Location</h4>
-                    <p className="text-sm text-muted-foreground">{selectedReport.address}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedReport.address}
+                    </p>
                   </div>
                   <div>
                     <h4 className="font-medium">Reported by</h4>
-                    <p className="text-sm text-muted-foreground">{selectedReport.reportedBy}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedReport.reportedBy}
+                    </p>
                   </div>
                   <Button className="w-full mt-4">
                     <Users className="h-4 w-4 mr-2" />
