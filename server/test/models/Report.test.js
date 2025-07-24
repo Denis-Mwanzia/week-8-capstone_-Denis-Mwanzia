@@ -1,3 +1,4 @@
+const { v4: uuidv4 } = require('uuid');
 const Report = require('../../models/Report');
 const User = require('../../models/User');
 
@@ -5,10 +6,13 @@ describe('Report Model', () => {
   let user;
 
   beforeEach(async () => {
+    await User.deleteMany();
+    await Report.deleteMany();
     user = new User({
       name: 'John Doe',
-      email: 'john@example.com',
+      email: `john_${uuidv4()}@example.com`,
       password: 'password123',
+      isActive: true,
     });
     await user.save();
   });

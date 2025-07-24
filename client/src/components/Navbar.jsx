@@ -1,10 +1,30 @@
 import { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Droplets, Menu, MapPin, Plus, BarChart3, Users, LogOut, Award } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
+  Droplets,
+  Menu,
+  MapPin,
+  Plus,
+  BarChart3,
+  Users,
+  LogOut,
+  Award,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export const Navbar = ({ currentPage, onPageChange }) => {
@@ -14,13 +34,35 @@ export const Navbar = ({ currentPage, onPageChange }) => {
   if (!user) return null;
 
   const menuItems = [
-    { id: 'map', label: 'Water Map', icon: MapPin, roles: ['citizen', 'verifier', 'technician', 'admin'] },
-    { id: 'report', label: 'Report Issue', icon: Plus, roles: ['citizen', 'verifier', 'admin'] },
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, roles: ['technician', 'admin'] },
-    { id: 'verify', label: 'Verify Reports', icon: Users, roles: ['verifier', 'admin'] },
+    {
+      id: 'map',
+      label: 'Water Map',
+      icon: MapPin,
+      roles: ['citizen', 'verifier', 'technician', 'admin'],
+    },
+    {
+      id: 'report',
+      label: 'Report Issue',
+      icon: Plus,
+      roles: ['citizen', 'verifier', 'admin'],
+    },
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: BarChart3,
+      roles: ['technician', 'admin'],
+    },
+    {
+      id: 'verify',
+      label: 'Verify Reports',
+      icon: Users,
+      roles: ['verifier', 'admin'],
+    },
   ];
 
-  const filteredItems = menuItems.filter(item => item.roles.includes(user.role));
+  const filteredItems = menuItems.filter((item) =>
+    item.roles.includes(user.role)
+  );
 
   const handleItemClick = (pageId) => {
     onPageChange(pageId);
@@ -32,7 +74,7 @@ export const Navbar = ({ currentPage, onPageChange }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <button 
+            <button
               onClick={() => onPageChange('home')}
               className="flex items-center space-x-2 text-primary font-bold text-xl"
             >
@@ -46,7 +88,7 @@ export const Navbar = ({ currentPage, onPageChange }) => {
             {filteredItems.map((item) => (
               <Button
                 key={item.id}
-                variant={currentPage === item.id ? "default" : "ghost"}
+                variant={currentPage === item.id ? 'default' : 'ghost'}
                 onClick={() => handleItemClick(item.id)}
                 className="flex items-center space-x-2"
               >
@@ -66,7 +108,10 @@ export const Navbar = ({ currentPage, onPageChange }) => {
             {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                <Button
+                  variant="ghost"
+                  className="relative h-8 w-8 rounded-full"
+                >
                   <Avatar className="h-8 w-8">
                     <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                   </Avatar>
@@ -74,8 +119,12 @@ export const Navbar = ({ currentPage, onPageChange }) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <div className="flex flex-col space-y-1 p-2">
-                  <p className="text-sm font-medium leading-none">{user.name}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                  <p className="text-sm font-medium leading-none">
+                    {user.name}
+                  </p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user.email}
+                  </p>
                   <Badge variant="outline" className="w-fit mt-1">
                     {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                   </Badge>
@@ -96,11 +145,14 @@ export const Navbar = ({ currentPage, onPageChange }) => {
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                <SheetTitle className="sr-only">
+                  Mobile Navigation Menu
+                </SheetTitle>
                 <div className="flex flex-col space-y-4 mt-4">
                   {filteredItems.map((item) => (
                     <Button
                       key={item.id}
-                      variant={currentPage === item.id ? "default" : "ghost"}
+                      variant={currentPage === item.id ? 'default' : 'ghost'}
                       onClick={() => handleItemClick(item.id)}
                       className="justify-start"
                     >

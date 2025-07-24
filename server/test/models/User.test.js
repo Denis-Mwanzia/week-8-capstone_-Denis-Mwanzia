@@ -1,11 +1,16 @@
+const { v4: uuidv4 } = require('uuid');
 const User = require('../../models/User');
 
 describe('User Model', () => {
+  beforeEach(async () => {
+    await User.deleteMany();
+  });
+
   describe('Password Hashing', () => {
     it('should hash password before saving', async () => {
       const userData = {
         name: 'John Doe',
-        email: 'john@example.com',
+        email: `john_${uuidv4()}@example.com`,
         password: 'password123',
       };
 
@@ -21,7 +26,7 @@ describe('User Model', () => {
     it('should compare password correctly', async () => {
       const user = new User({
         name: 'John Doe',
-        email: 'john@example.com',
+        email: `john_${uuidv4()}@example.com`,
         password: 'password123',
       });
 
@@ -39,7 +44,7 @@ describe('User Model', () => {
     it('should not include password in JSON output', async () => {
       const user = new User({
         name: 'John Doe',
-        email: 'john@example.com',
+        email: `john_${uuidv4()}@example.com`,
         password: 'password123',
       });
 
@@ -72,7 +77,7 @@ describe('User Model', () => {
     it('should set default role to citizen', async () => {
       const user = new User({
         name: 'John Doe',
-        email: 'john@example.com',
+        email: `john_${uuidv4()}@example.com`,
         password: 'password123',
       });
 

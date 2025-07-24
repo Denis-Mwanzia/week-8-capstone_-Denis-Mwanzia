@@ -1,12 +1,24 @@
 import { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Droplets } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Droplets } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from '@/hooks/use-toast';
 
 export const RegisterForm = ({ onSwitchToLogin }) => {
   const [formData, setFormData] = useState({
@@ -14,7 +26,7 @@ export const RegisterForm = ({ onSwitchToLogin }) => {
     email: '',
     password: '',
     phone: '',
-    role: 'citizen'
+    role: 'citizen',
   });
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
@@ -25,25 +37,27 @@ export const RegisterForm = ({ onSwitchToLogin }) => {
     setIsLoading(true);
 
     const success = await register(formData);
-    
+
     if (success) {
       toast({
-        title: "Account created!",
-        description: "Welcome to Tuko Maji. You can now start reporting water issues.",
+        title: 'Account created!',
+        description:
+          'Welcome to Tuko Maji. You can now start reporting water issues.',
       });
     } else {
       toast({
-        title: "Registration failed",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
+        title: 'Registration failed',
+        description:
+          'Something went wrong (user may already exist, or server error). Please try again.',
+        variant: 'destructive',
       });
     }
-    
+
     setIsLoading(false);
   };
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -54,7 +68,9 @@ export const RegisterForm = ({ onSwitchToLogin }) => {
             <Droplets className="h-12 w-12 text-primary" />
           </div>
           <CardTitle className="text-2xl">Join Tuko Maji</CardTitle>
-          <CardDescription>Create an account to help improve water access in Nairobi</CardDescription>
+          <CardDescription>
+            Create an account to help improve water access in Nairobi
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -68,7 +84,7 @@ export const RegisterForm = ({ onSwitchToLogin }) => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -80,7 +96,7 @@ export const RegisterForm = ({ onSwitchToLogin }) => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
               <Input
@@ -90,10 +106,13 @@ export const RegisterForm = ({ onSwitchToLogin }) => {
                 onChange={(e) => handleInputChange('phone', e.target.value)}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={formData.role} onValueChange={(value) => handleInputChange('role', value)}>
+              <Select
+                value={formData.role}
+                onValueChange={(value) => handleInputChange('role', value)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
@@ -103,7 +122,7 @@ export const RegisterForm = ({ onSwitchToLogin }) => {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
@@ -117,10 +136,10 @@ export const RegisterForm = ({ onSwitchToLogin }) => {
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Creating account..." : "Create Account"}
+              {isLoading ? 'Creating account...' : 'Create Account'}
             </Button>
           </form>
-          
+
           <div className="mt-4 text-center">
             <span className="text-sm text-muted-foreground">
               Already have an account?{' '}

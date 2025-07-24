@@ -17,6 +17,12 @@ const auth = async (req, res, next) => {
     );
 
     const user = await User.findById(decoded.userId);
+    console.log(
+      'AUTH MIDDLEWARE: decoded.userId:',
+      decoded.userId,
+      'user:',
+      user
+    );
     if (!user || !user.isActive) {
       return res.status(401).json({ message: 'Token is not valid' });
     }
