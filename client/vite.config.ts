@@ -6,12 +6,15 @@ export default defineConfig({
   server: {
     host: '::',
     port: 8080,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-    },
+    proxy:
+      process.env.NODE_ENV === 'development'
+        ? {
+            '/api': {
+              target: 'http://localhost:5000',
+              changeOrigin: true,
+            },
+          }
+        : undefined,
   },
   plugins: [react()],
   resolve: {
@@ -19,4 +22,5 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  base: '/',
 });
