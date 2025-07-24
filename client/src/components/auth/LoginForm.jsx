@@ -81,7 +81,7 @@ export const LoginForm = ({ onSwitchToRegister }) => {
 
             <Alert>
               <AlertDescription>
-                You can use existing accounts admin@exapmle.com,
+                You can use existing accounts admin@example.com,
                 verifier@example.com, technician@example.com and
                 citizen@example.com Password is 1234567
               </AlertDescription>
