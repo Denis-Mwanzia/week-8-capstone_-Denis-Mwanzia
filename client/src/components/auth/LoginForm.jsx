@@ -81,8 +81,9 @@ export const LoginForm = ({ onSwitchToRegister }) => {
 
             <Alert>
               <AlertDescription>
-                For development, the app will connect to the backend API.
-                Register a new account or use existing credentials.
+                You use existing accounts admin@exapmle.com,
+                verifier@example.com, technician@example.com and
+                citizen@example.com Password is 1234567
               </AlertDescription>
             </Alert>
 
