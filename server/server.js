@@ -31,7 +31,7 @@ const authRoutes = require('./routes/auth');
 const reportRoutes = require('./routes/reports');
 const userRoutes = require('./routes/users');
 
-// Routes
+// Routes - Make sure these are registered correctly
 app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
@@ -39,6 +39,22 @@ app.use('/api/users', userRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ message: 'Tuko Maji API is running!' });
+});
+
+// Test route to verify auth routes are loaded
+app.get('/api/test-routes', (req, res) => {
+  res.json({
+    message: 'Routes loaded',
+    availableRoutes: [
+      'GET /api/auth/profile',
+      'POST /api/auth/login',
+      'POST /api/auth/register',
+      'PUT /api/auth/profile',
+      'PUT /api/auth/change-password',
+      'POST /api/auth/logout',
+      'GET /api/auth/verify-token',
+    ],
+  });
 });
 
 // Global error handling middleware
@@ -69,6 +85,20 @@ app.use((error, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
+// 404 handler - should be after all routes
+app.use('*', (req, res) => {
+  console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+    availableRoutes: [
+      'GET /api/auth/profile',
+      'POST /api/auth/login',
+      'POST /api/auth/register',
+      'GET /api/health',
+    ],
+  });
+});
+
 // Connect to MongoDB
 const connectDB = async () => {
   try {
@@ -90,4 +120,9 @@ app.listen(PORT, () => {
   console.log(
     `Uploads will be served from: ${path.join(__dirname, 'uploads')}`
   );
+  console.log('Available routes:');
+  console.log('  GET /api/auth/profile');
+  console.log('  POST /api/auth/login');
+  console.log('  POST /api/auth/register');
+  console.log('  GET /api/health');
 });
