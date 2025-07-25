@@ -16,77 +16,279 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CheckCircle, X, Camera, MapPin, Award, Users } from 'lucide-react';
+import {
+  CheckCircle,
+  X,
+  Camera,
+  MapPin,
+  Award,
+  Users,
+  AlertTriangle,
+  Clock,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface PendingReport {
-  id: string;
-  type: string;
+  _id: string;
+  title: string;
   description: string;
-  location: string | { type: string; coordinates: [number, number] };
-  reportedBy: string;
-  reportedAt: string;
+  category: string;
+  location: {
+    type: string;
+    coordinates: [number, number];
+  };
+  address: string;
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  reportedBy: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  createdAt: string;
   media: string[];
-  votes: number;
+  upvotes: string[];
+  comments: any[];
+}
+
+interface UserStats {
+  totalVerified: number;
+  weeklyVerified: number;
+  accuracyRate: number;
+  pointsEarned: number;
+  userPoints: number;
 }
 
 // Helper function to format location
-const formatLocation = (
-  loc: string | { type: string; coordinates: [number, number] }
-): string => {
-  if (typeof loc === 'string') return loc;
-  if (loc?.coordinates?.length === 2)
-    return `Lat: ${loc.coordinates[1]}, Lng: ${loc.coordinates[0]}`;
+const formatLocation = (location: {
+  type: string;
+  coordinates: [number, number];
+}): string => {
+  if (location?.coordinates?.length === 2) {
+    const [lng, lat] = location.coordinates;
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  }
   return 'Unknown location';
+};
+
+// Helper function to format date
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+// Helper function to get urgency color
+const getUrgencyColor = (urgency: string) => {
+  switch (urgency) {
+    case 'low':
+      return 'bg-green-100 text-green-800';
+    case 'medium':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'high':
+      return 'bg-orange-100 text-orange-800';
+    case 'critical':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
 };
 
 export const VerificationHub = () => {
   const { user } = useAuth();
-  const [pendingReports, setPendingReports] = useState<any[]>([]);
-  const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [pendingReports, setPendingReports] = useState<PendingReport[]>([]);
+  const [selectedReport, setSelectedReport] = useState<PendingReport | null>(
+    null
+  );
   const [verificationNotes, setVerificationNotes] = useState('');
   const [severity, setSeverity] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<UserStats>({
+    totalVerified: 0,
+    weeklyVerified: 0,
+    accuracyRate: 0,
+    pointsEarned: 0,
+    userPoints: 0,
+  });
   const { toast } = useToast();
 
+  // Check if user has required permissions
+  const canVerify =
+    user?.role === 'admin' ||
+    user?.role === 'verifier' ||
+    user?.role === 'technician';
+
   useEffect(() => {
-    const fetchReports = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await api.get('/reports?status=pending');
-        setPendingReports(res.data);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load pending reports');
-      }
-      setLoading(false);
-    };
+    if (!canVerify) return;
+
     fetchReports();
-  }, [user]);
+    fetchUserStats();
+  }, [user, canVerify]);
 
-  const handleVerification = (action: 'verify' | 'reject') => {
-    if (!selectedReport) return;
-
-    const actionText = action === 'verify' ? 'verified' : 'rejected';
-
-    toast({
-      title: `Report ${actionText}`,
-      description: `Report ${selectedReport.id} has been ${actionText}. You earned 10 points!`,
-    });
-
-    setSelectedReport(null);
-    setVerificationNotes('');
-    setSeverity('');
+  const fetchReports = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch reports that are pending verification (status: pending or reported)
+      const res = await api.get('/reports?status=pending&limit=50');
+      setPendingReports(res.data || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load pending reports');
+      console.error('Failed to fetch reports:', err);
+    }
+    setLoading(false);
   };
 
-  if (loading) {
-    return <div className="p-8 text-center">Loading pending reports...</div>;
+  const fetchUserStats = async () => {
+    try {
+      // In a real implementation, you'd have a dedicated endpoint for verification stats
+      // For now, we'll simulate this with existing data
+      const userRes = await api.get(`/auth/profile`);
+      const userData = userRes.data;
+
+      setStats({
+        totalVerified: userData.verificationsCount || 0,
+        weeklyVerified: userData.weeklyVerifications || 12,
+        accuracyRate: userData.verificationAccuracy || 94,
+        pointsEarned: userData.weeklyPoints || 50,
+        userPoints: userData.points || 350,
+      });
+    } catch (err) {
+      console.error('Failed to fetch user stats:', err);
+    }
+  };
+
+  const handleVerification = async (action: 'verify' | 'reject') => {
+    if (!selectedReport || !severity) return;
+
+    setSubmitting(true);
+
+    try {
+      const verificationData = {
+        status: action === 'verify' ? 'verified' : 'rejected',
+        verificationNotes: verificationNotes.trim(),
+        severity: severity,
+        verifiedBy: user?.id,
+      };
+
+      // Update report status
+      await api.patch(
+        `/reports/${selectedReport._id}/status`,
+        verificationData
+      );
+
+      const actionText = action === 'verify' ? 'verified' : 'rejected';
+      const pointsAwarded = action === 'verify' ? 10 : 5;
+
+      toast({
+        title: `Report ${actionText}`,
+        description: `Report has been ${actionText} successfully. You earned ${pointsAwarded} points!`,
+      });
+
+      // Remove the report from pending list
+      setPendingReports((prev) =>
+        prev.filter((report) => report._id !== selectedReport._id)
+      );
+
+      // Update stats
+      setStats((prev) => ({
+        ...prev,
+        totalVerified: prev.totalVerified + 1,
+        weeklyVerified: prev.weeklyVerified + 1,
+        pointsEarned: prev.pointsEarned + pointsAwarded,
+        userPoints: prev.userPoints + pointsAwarded,
+      }));
+
+      // Reset form
+      setSelectedReport(null);
+      setVerificationNotes('');
+      setSeverity('');
+    } catch (err: any) {
+      toast({
+        title: 'Verification Failed',
+        description: err.message || 'Failed to process verification',
+        variant: 'destructive',
+      });
+      console.error('Verification error:', err);
+    }
+
+    setSubmitting(false);
+  };
+
+  const addComment = async (reportId: string, text: string) => {
+    try {
+      await api.post(`/reports/${reportId}/comments`, { text });
+      toast({
+        title: 'Comment Added',
+        description: 'Your comment has been added to the report.',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Failed to Add Comment',
+        description: err.message || 'Could not add comment',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (!canVerify) {
+    return (
+      <div className="max-w-7xl mx-auto p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              <span>Access Restricted</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              You don't have permission to access the Verification Hub. Only
+              verified community members and administrators can verify reports.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto p-4">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            <span>Loading pending reports...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
-    return <div className="p-8 text-center text-red-500">{error}</div>;
+    return (
+      <div className="max-w-7xl mx-auto p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-red-600">
+              Error Loading Reports
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={fetchReports}>Try Again</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -96,7 +298,7 @@ export const VerificationHub = () => {
         <div className="flex items-center space-x-4">
           <Badge variant="secondary" className="flex items-center space-x-1">
             <Award className="h-3 w-3" />
-            <span>350 Points</span>
+            <span>{stats.userPoints} Points</span>
           </Badge>
           <Badge variant="outline">Community Verifier</Badge>
         </div>
@@ -121,7 +323,7 @@ export const VerificationHub = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
+            <div className="text-2xl font-bold">{stats.weeklyVerified}</div>
           </CardContent>
         </Card>
         <Card>
@@ -129,7 +331,7 @@ export const VerificationHub = () => {
             <CardTitle className="text-sm font-medium">Accuracy Rate</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">94%</div>
+            <div className="text-2xl font-bold">{stats.accuracyRate}%</div>
           </CardContent>
         </Card>
         <Card>
@@ -137,7 +339,7 @@ export const VerificationHub = () => {
             <CardTitle className="text-sm font-medium">Points Earned</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+50</div>
+            <div className="text-2xl font-bold">+{stats.pointsEarned}</div>
           </CardContent>
         </Card>
       </div>
@@ -153,46 +355,69 @@ export const VerificationHub = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {pendingReports.map((report) => (
-                  <div
-                    key={report._id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
-                      selectedReport?._id === report._id
-                        ? 'border-primary bg-muted/50'
-                        : ''
-                    }`}
-                    onClick={() => setSelectedReport(report)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Badge variant="outline">{report.type}</Badge>
-                          <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                            <Users className="h-3 w-3" />
-                            <span>{report.votes} votes</span>
+              {pendingReports.length === 0 ? (
+                <div className="text-center py-8">
+                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium mb-2">All caught up!</h3>
+                  <p className="text-muted-foreground">
+                    There are no reports pending verification at the moment.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingReports.map((report) => (
+                    <div
+                      key={report._id}
+                      className={`p-4 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
+                        selectedReport?._id === report._id
+                          ? 'border-primary bg-muted/50'
+                          : ''
+                      }`}
+                      onClick={() => setSelectedReport(report)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Badge variant="outline">{report.category}</Badge>
+                            <Badge className={getUrgencyColor(report.urgency)}>
+                              {report.urgency}
+                            </Badge>
+                            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
+                              <Users className="h-3 w-3" />
+                              <span>{report.upvotes.length} votes</span>
+                            </div>
                           </div>
-                        </div>
-                        <p className="font-medium mb-1">{report.description}</p>
-                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <div className="flex items-center space-x-1">
-                            <MapPin className="h-3 w-3" />
-                            <span>{formatLocation(report.location)}</span>
+                          <h3 className="font-medium mb-1">{report.title}</h3>
+                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                            {report.description}
+                          </p>
+                          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                            <div className="flex items-center space-x-1">
+                              <MapPin className="h-3 w-3" />
+                              <span className="truncate max-w-32">
+                                {report.address}
+                              </span>
+                            </div>
+                            <span>by {report.reportedBy.name}</span>
+                            <div className="flex items-center space-x-1">
+                              <Clock className="h-3 w-3" />
+                              <span>{formatDate(report.createdAt)}</span>
+                            </div>
                           </div>
-                          <span>by {report.reportedBy}</span>
-                          <span>{report.reportedAt}</span>
-                        </div>
-                        <div className="flex items-center space-x-2 mt-2">
-                          <Camera className="h-3 w-3" />
-                          <span className="text-xs text-muted-foreground">
-                            {report.media.length} photo(s) attached
-                          </span>
+                          {report.media.length > 0 && (
+                            <div className="flex items-center space-x-2 mt-2">
+                              <Camera className="h-3 w-3" />
+                              <span className="text-xs text-muted-foreground">
+                                {report.media.length} photo(s) attached
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -205,7 +430,13 @@ export const VerificationHub = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h4 className="font-medium mb-2">{selectedReport.type}</h4>
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Badge variant="outline">{selectedReport.category}</Badge>
+                    <Badge className={getUrgencyColor(selectedReport.urgency)}>
+                      {selectedReport.urgency}
+                    </Badge>
+                  </div>
+                  <h4 className="font-medium mb-2">{selectedReport.title}</h4>
                   <p className="text-sm text-muted-foreground">
                     {selectedReport.description}
                   </p>
@@ -214,29 +445,47 @@ export const VerificationHub = () => {
                 <div className="space-y-2">
                   <h4 className="font-medium">Location</h4>
                   <p className="text-sm text-muted-foreground">
-                    {formatLocation(selectedReport.location)}
+                    {selectedReport.address}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Coordinates: {formatLocation(selectedReport.location)}
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <h4 className="font-medium">Attached Media</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    {selectedReport.media.map(
-                      (media: string, index: number) => (
+                {selectedReport.media.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Attached Media</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {selectedReport.media.map((mediaUrl, index) => (
                         <div
                           key={index}
-                          className="aspect-square bg-muted rounded-lg flex items-center justify-center"
+                          className="aspect-square bg-muted rounded-lg flex items-center justify-center relative overflow-hidden"
                         >
-                          <Camera className="h-6 w-6 text-muted-foreground" />
+                          {mediaUrl.toLowerCase().includes('image') ||
+                          mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <img
+                              src={mediaUrl}
+                              alt={`Report media ${index + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                target.nextElementSibling!.classList.remove(
+                                  'hidden'
+                                );
+                              }}
+                            />
+                          ) : null}
+                          <Camera className="h-6 w-6 text-muted-foreground hidden" />
                         </div>
-                      )
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Severity Assessment
+                    Severity Assessment *
                   </label>
                   <Select value={severity} onValueChange={setSeverity}>
                     <SelectTrigger>
@@ -268,18 +517,19 @@ export const VerificationHub = () => {
                   <Button
                     className="flex-1"
                     onClick={() => handleVerification('verify')}
-                    disabled={!severity}
+                    disabled={!severity || submitting}
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    Verify (+10 pts)
+                    {submitting ? 'Processing...' : 'Verify (+10 pts)'}
                   </Button>
                   <Button
                     variant="outline"
                     className="flex-1"
                     onClick={() => handleVerification('reject')}
+                    disabled={submitting}
                   >
                     <X className="h-4 w-4 mr-2" />
-                    Reject
+                    {submitting ? 'Processing...' : 'Reject (+5 pts)'}
                   </Button>
                 </div>
               </CardContent>
@@ -291,18 +541,35 @@ export const VerificationHub = () => {
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-sm">
-                  <strong>Reported by:</strong> {selectedReport.reportedBy}
+                  <strong>Reported by:</strong> {selectedReport.reportedBy.name}
                 </p>
                 <p className="text-sm">
-                  <strong>Date:</strong> {selectedReport.reportedAt}
+                  <strong>Date:</strong> {formatDate(selectedReport.createdAt)}
                 </p>
                 <p className="text-sm">
-                  <strong>Community votes:</strong> {selectedReport.votes}
+                  <strong>Community votes:</strong>{' '}
+                  {selectedReport.upvotes.length}
                 </p>
-                <div className="pt-2">
+                <p className="text-sm">
+                  <strong>Comments:</strong> {selectedReport.comments.length}
+                </p>
+                <div className="pt-2 space-y-2">
                   <Button variant="outline" size="sm" className="w-full">
                     <MapPin className="h-3 w-3 mr-2" />
                     View on Map
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      const comment = prompt('Add a comment:');
+                      if (comment?.trim()) {
+                        addComment(selectedReport._id, comment.trim());
+                      }
+                    }}
+                  >
+                    Add Comment
                   </Button>
                 </div>
               </CardContent>
