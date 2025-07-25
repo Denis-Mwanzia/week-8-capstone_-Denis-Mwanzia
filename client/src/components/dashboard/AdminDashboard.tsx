@@ -643,7 +643,7 @@ export const AdminDashboard = () => {
               <CardContent>
                 <div className="text-center py-8">
                   <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">Chart visualization would go here</p>
+                  <p className="text-muted-foreground">Chart visualization coming soon</p>
                   <p className="text-sm text-muted-foreground mt-2">
                     Integration with charting library like Recharts
                   </p>
@@ -659,7 +659,7 @@ export const AdminDashboard = () => {
               <CardContent>
                 <div className="text-center py-8">
                   <MapPin className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">Map visualization would go here</p>
+                  <p className="text-muted-foreground">Map visualization coming soon</p>
                   <p className="text-sm text-muted-foreground mt-2">
                     Integration with mapping service
                   </p>
