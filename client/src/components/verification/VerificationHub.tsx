@@ -120,11 +120,8 @@ export const VerificationHub = () => {
   });
   const { toast } = useToast();
 
-  // Check if user has required permissions
-  const canVerify =
-    user?.role === 'admin' ||
-    user?.role === 'verifier' ||
-    user?.role === 'technician';
+  // Check if user has required permissions for verification
+  const canVerify = user?.role === 'admin' || user?.role === 'verifier';
 
   useEffect(() => {
     if (!canVerify) return;
@@ -137,7 +134,7 @@ export const VerificationHub = () => {
     setLoading(true);
     setError(null);
     try {
-      // Fetch reports that are pending verification (status: pending or reported)
+      // Fetch reports that are pending verification (status: pending)
       const res = await api.get('/reports?status=pending&limit=50');
       setPendingReports(res.data || []);
     } catch (err: any) {
@@ -167,23 +164,41 @@ export const VerificationHub = () => {
   };
 
   const handleVerification = async (action: 'verify' | 'reject') => {
-    if (!selectedReport || !severity) return;
+    if (!selectedReport) return;
+
+    // For rejection, we need verification notes
+    if (action === 'reject' && !verificationNotes.trim()) {
+      toast({
+        title: 'Rejection Reason Required',
+        description: 'Please provide a reason for rejecting this report.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setSubmitting(true);
 
     try {
-      const verificationData = {
-        status: action === 'verify' ? 'verified' : 'rejected',
-        verificationNotes: verificationNotes.trim(),
-        severity: severity,
-        verifiedBy: user?.id,
-      };
+      let response;
 
-      // Update report status
-      await api.patch(
-        `/reports/${selectedReport._id}/status`,
-        verificationData
-      );
+      if (action === 'verify') {
+        // Use the dedicated verify endpoint
+        response = await api.patch(`/reports/${selectedReport._id}/verify`);
+
+        // If verification notes are provided, add them as a comment
+        if (verificationNotes.trim()) {
+          await api.post(`/reports/${selectedReport._id}/comments`, {
+            text: `Verification notes: ${verificationNotes.trim()}${
+              severity ? ` | Severity: ${severity}` : ''
+            }`,
+          });
+        }
+      } else {
+        // Use the dedicated reject endpoint
+        response = await api.patch(`/reports/${selectedReport._id}/reject`, {
+          reason: verificationNotes.trim(),
+        });
+      }
 
       const actionText = action === 'verify' ? 'verified' : 'rejected';
       const pointsAwarded = action === 'verify' ? 10 : 5;
@@ -212,12 +227,20 @@ export const VerificationHub = () => {
       setVerificationNotes('');
       setSeverity('');
     } catch (err: any) {
+      console.error('Verification error:', err);
+
+      let errorMessage = 'Failed to process verification';
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
       toast({
         title: 'Verification Failed',
-        description: err.message || 'Failed to process verification',
+        description: errorMessage,
         variant: 'destructive',
       });
-      console.error('Verification error:', err);
     }
 
     setSubmitting(false);
@@ -252,7 +275,11 @@ export const VerificationHub = () => {
           <CardContent>
             <p className="text-muted-foreground">
               You don't have permission to access the Verification Hub. Only
-              verified community members and administrators can verify reports.
+              admin and verifier roles can verify reports.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Your current role:{' '}
+              <Badge variant="outline">{user?.role || 'unknown'}</Badge>
             </p>
           </CardContent>
         </Card>
@@ -300,7 +327,9 @@ export const VerificationHub = () => {
             <Award className="h-3 w-3" />
             <span>{stats.userPoints} Points</span>
           </Badge>
-          <Badge variant="outline">Community Verifier</Badge>
+          <Badge variant="outline">
+            {user?.role === 'admin' ? 'Administrator' : 'Community Verifier'}
+          </Badge>
         </div>
       </div>
 
@@ -485,11 +514,11 @@ export const VerificationHub = () => {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Severity Assessment *
+                    Severity Assessment
                   </label>
                   <Select value={severity} onValueChange={setSeverity}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Rate severity" />
+                      <SelectValue placeholder="Rate severity (optional)" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">1 - Minor issue</SelectItem>
@@ -504,6 +533,10 @@ export const VerificationHub = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
                     Verification Notes
+                    <span className="text-red-500 ml-1">*</span>
+                    <span className="text-xs text-muted-foreground ml-1">
+                      (Required for rejection)
+                    </span>
                   </label>
                   <Textarea
                     placeholder="Add your verification notes, additional observations, or context..."
@@ -517,7 +550,7 @@ export const VerificationHub = () => {
                   <Button
                     className="flex-1"
                     onClick={() => handleVerification('verify')}
-                    disabled={!severity || submitting}
+                    disabled={submitting}
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
                     {submitting ? 'Processing...' : 'Verify (+10 pts)'}
