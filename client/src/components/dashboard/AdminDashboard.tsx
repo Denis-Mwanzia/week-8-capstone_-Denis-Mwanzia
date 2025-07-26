@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import api from '@/lib/api';
 
 // Note: These UI components would normally be imported from shadcn/ui
 // For this demo, we'll create simplified versions inline
@@ -124,38 +125,57 @@ import {
 } from 'lucide-react';
 
 // API service
-const API_BASE_URL = 'http://localhost:5000/api';
-
 const apiService = {
-  // Get auth token from storage (you'll need to implement this based on your auth system)
-  getAuthToken: () => {
-    return localStorage.getItem('tukomaji_token');
-  },
-
-  // Generic API call with error handling
+  // Generic API call with error handling using the existing api instance
   apiCall: async (endpoint, options = {}) => {
-    const token = apiService.getAuthToken();
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-      },
-      ...options,
-    };
-
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-      const data = await response.json();
+      const method = options.method || 'GET';
+      const config = {
+        method,
+        ...options,
+      };
 
-      if (!response.ok) {
-        throw new Error(data.message || 'API call failed');
+      let response;
+      switch (method.toUpperCase()) {
+        case 'GET':
+          response = await api.get(endpoint);
+          break;
+        case 'POST':
+          response = await api.post(
+            endpoint,
+            options.body ? JSON.parse(options.body) : {}
+          );
+          break;
+        case 'PUT':
+          response = await api.put(
+            endpoint,
+            options.body ? JSON.parse(options.body) : {}
+          );
+          break;
+        case 'PATCH':
+          response = await api.patch(
+            endpoint,
+            options.body ? JSON.parse(options.body) : {}
+          );
+          break;
+        case 'DELETE':
+          response = await api.delete(endpoint);
+          break;
+        default:
+          throw new Error(`Unsupported method: ${method}`);
       }
 
-      return data;
+      return response.data;
     } catch (error) {
       console.error(`API call failed for ${endpoint}:`, error);
-      throw error;
+      // Handle axios error format
+      if (error.response) {
+        throw new Error(error.response.data?.message || 'API call failed');
+      } else if (error.request) {
+        throw new Error('No response from server');
+      } else {
+        throw new Error(error.message || 'API call failed');
+      }
     }
   },
 
@@ -426,6 +446,16 @@ export const AdminDashboard = () => {
   const handleAssignReport = async (reportId, assignedToId) => {
     try {
       setLoading(true);
+
+      // Get the current report to check its status
+      const currentReport = reports.find((r) => r._id === reportId);
+
+      // If the report is not verified, verify it first
+      if (currentReport && currentReport.status !== 'verified') {
+        await apiService.reports.verifyReport(reportId);
+      }
+
+      // Then assign the report
       await apiService.reports.assignReport(reportId, {
         technicianId: assignedToId,
       });
