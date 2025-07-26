@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import {
   Wrench,
   MapPin,
@@ -26,6 +27,7 @@ import {
   Camera,
   Upload,
   UserPlus,
+  X,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import api from '@/lib/api';
@@ -59,7 +61,16 @@ interface Report {
   resolvedAt?: string;
   estimatedResolution?: string;
   upvotes: string[];
-  comments: any[];
+  comments: Array<{
+    _id: string;
+    user: {
+      _id: string;
+      name: string;
+      email: string;
+    };
+    text: string;
+    createdAt: string;
+  }>;
   media: string[];
 }
 
@@ -70,6 +81,7 @@ export const TechnicianDashboard = () => {
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [updateStatus, setUpdateStatus] = useState('');
   const [techNotes, setTechNotes] = useState('');
+  const [estimatedResolution, setEstimatedResolution] = useState('');
   const [workPhotos, setWorkPhotos] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -77,61 +89,89 @@ export const TechnicianDashboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchReports = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const res = await api.get('/reports');
-        const reports = res.data || [];
-
-        // Get user ID (your user object uses _id)
-        const userId = user?._id;
-
-        // Filter assigned reports
-        const assigned = reports.filter(
-          (r: Report) => r.assignedTo && r.assignedTo._id === userId
-        );
-
-        // Filter available reports (verified/pending, not assigned to anyone)
-        const available = reports.filter(
-          (r: Report) =>
-            (r.status === 'verified' || r.status === 'pending') && !r.assignedTo
-        );
-
-        setAssignedReports(assigned);
-        setAvailableReports(available);
-      } catch (err: any) {
-        console.error('Fetch reports error:', err);
-        setError(
-          err.response?.data?.message || err.message || 'Failed to load reports'
-        );
-      }
-      setLoading(false);
-    };
-
-    if (user?._id) {
-      fetchReports();
-    } else {
-      setLoading(false);
-      setError('User not authenticated');
-    }
+    fetchReports();
   }, [user]);
 
-  const handleSelfAssign = async (reportId: string) => {
+  const fetchReports = async () => {
+    // Fix: Check for both user.id and user._id to handle different response formats
+    const userId = user?.id || user?._id;
+
+    if (!userId) {
+      setLoading(false);
+      setError('User not authenticated. Please log in again.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
     try {
-      // Self-assign the report
-      const response = await api.patch(`/reports/${reportId}/assign`, {
-        technicianId: user?._id,
+      const res = await api.get('/reports');
+      const reports = res.data || [];
+
+      // Filter assigned reports (reports assigned to current user)
+      const assigned = reports.filter(
+        (r: Report) =>
+          r.assignedTo &&
+          (r.assignedTo._id === userId || r.assignedTo.id === userId)
+      );
+
+      // Filter available reports (verified reports not assigned to anyone)
+      const available = reports.filter(
+        (r: Report) => r.status === 'verified' && !r.assignedTo
+      );
+
+      setAssignedReports(assigned);
+      setAvailableReports(available);
+    } catch (err: any) {
+      console.error('Fetch reports error:', err);
+      let errorMessage = 'Failed to load reports';
+
+      if (err.status === 401) {
+        errorMessage = 'Session expired. Please log in again.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+
+      setError(errorMessage);
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+    setLoading(false);
+  };
+
+  const handleSelfAssign = async (reportId: string) => {
+    const userId = user?.id || user?._id;
+
+    if (!userId) {
+      toast({
+        title: 'Authentication Error',
+        description: 'Please log in again to assign reports.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Update report status to assign technician
+      const response = await api.patch(`/reports/${reportId}/status`, {
+        assignedTo: userId,
+        status: 'verified', // Keep as verified but now assigned
       });
 
       // Move from available to assigned
       const report = availableReports.find((r) => r._id === reportId);
       if (report) {
         const updatedReport = {
-          ...report,
+          ...response.data,
           assignedTo: {
-            _id: user?._id || '',
+            _id: userId,
+            id: userId, // Add both for compatibility
             name: user?.name || '',
             email: user?.email || '',
           },
@@ -147,9 +187,17 @@ export const TechnicianDashboard = () => {
       }
     } catch (err: any) {
       console.error('Self-assign error:', err);
+      let errorMessage = 'Failed to assign report';
+
+      if (err.status === 401) {
+        errorMessage = 'Session expired. Please log in again.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
       toast({
         title: 'Assignment Failed',
-        description: err.response?.data?.message || 'Failed to assign report',
+        description: errorMessage,
         variant: 'destructive',
       });
     }
@@ -165,32 +213,52 @@ export const TechnicianDashboard = () => {
       return;
     }
 
+    const userId = user?.id || user?._id;
+
+    if (!userId) {
+      toast({
+        title: 'Authentication Error',
+        description: 'Please log in again to update reports.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setUpdating(true);
     try {
-      const updateData: any = {
-        status:
-          updateStatus === 'start-work'
-            ? 'in_progress'
-            : updateStatus === 'complete'
-            ? 'resolved'
-            : updateStatus,
-      };
-
-      if (updateStatus === 'complete') {
-        updateData.resolvedAt = new Date().toISOString();
+      // Determine the new status based on the action
+      let newStatus = updateStatus;
+      if (updateStatus === 'start-work') {
+        newStatus = 'in_progress';
+      } else if (updateStatus === 'complete') {
+        newStatus = 'resolved';
       }
 
+      // Prepare update data
+      const updateData: any = {
+        status: newStatus,
+        assignedTo: userId,
+      };
+
+      // Add estimated resolution if provided
+      if (estimatedResolution.trim()) {
+        updateData.estimatedResolution = estimatedResolution.trim();
+      }
+
+      // Update the report status
+      const response = await api.patch(
+        `/reports/${selectedReport._id}/status`,
+        updateData
+      );
+
+      // Add technical notes as a comment if provided
       if (techNotes.trim()) {
         await api.post(`/reports/${selectedReport._id}/comments`, {
           text: `[Technician Update] ${techNotes.trim()}`,
         });
       }
 
-      const response = await api.patch(
-        `/reports/${selectedReport._id}/status`,
-        updateData
-      );
-
+      // Update local state
       setAssignedReports((prev) =>
         prev.map((report) =>
           report._id === selectedReport._id
@@ -199,21 +267,42 @@ export const TechnicianDashboard = () => {
         )
       );
 
+      // Show success message
+      const statusMessage = {
+        in_progress: 'Work started',
+        resolved: 'marked as resolved',
+        rejected: 'marked as unable to complete',
+      };
+
       toast({
         title: 'Status Updated Successfully',
-        description: `Report "${selectedReport.title}" has been updated.`,
+        description: `Report "${selectedReport.title}" has been ${
+          statusMessage[newStatus] || 'updated'
+        }.`,
       });
 
+      // Reset form
       setUpdateStatus('');
       setTechNotes('');
+      setEstimatedResolution('');
       setWorkPhotos([]);
       setSelectedReport(null);
+
+      // Refresh reports to get latest data
+      await fetchReports();
     } catch (err: any) {
       console.error('Status update error:', err);
+      let errorMessage = 'Failed to update report status';
+
+      if (err.status === 401) {
+        errorMessage = 'Session expired. Please log in again.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
       toast({
         title: 'Update Failed',
-        description:
-          err.response?.data?.message || 'Failed to update report status.',
+        description: errorMessage,
         variant: 'destructive',
       });
     }
@@ -316,7 +405,41 @@ export const TechnicianDashboard = () => {
         <div className="text-center">
           <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-red-500 mb-4">{error}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
+          <div className="space-x-2">
+            <Button onClick={() => fetchReports()}>Retry</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Clear local storage and reload
+                localStorage.removeItem('tukomaji_token');
+                window.location.reload();
+              }}
+            >
+              Re-login
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not authenticated at this point, show login message
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+          <p className="text-muted-foreground mb-4">
+            Please log in to access the technician dashboard.
+          </p>
+          <Button
+            onClick={() => {
+              // Redirect to login or reload to trigger auth
+              window.location.reload();
+            }}
+          >
+            Login
+          </Button>
         </div>
       </div>
     );
@@ -330,6 +453,9 @@ export const TechnicianDashboard = () => {
           <h1 className="text-3xl font-bold">Technician Dashboard</h1>
           <p className="text-muted-foreground">Welcome back, {user?.name}</p>
         </div>
+        <Button onClick={fetchReports} variant="outline" size="sm">
+          Refresh Reports
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -352,7 +478,7 @@ export const TechnicianDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{availableReports.length}</div>
-            <p className="text-xs text-muted-foreground">Can self-assign</p>
+            <p className="text-xs text-muted-foreground">Not assign</p>
           </CardContent>
         </Card>
 
@@ -526,14 +652,6 @@ export const TechnicianDashboard = () => {
                           <Badge variant="outline" className="capitalize">
                             {report.urgency}
                           </Badge>
-                          <Button
-                            size="sm"
-                            onClick={() => handleSelfAssign(report._id)}
-                            className="text-xs"
-                          >
-                            <UserPlus className="h-3 w-3 mr-1" />
-                            Assign to Me
-                          </Button>
                         </div>
                       </div>
                     </div>
@@ -673,16 +791,22 @@ export const TechnicianDashboard = () => {
       {/* Status Update Modal/Panel */}
       {selectedReport && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
-            <CardHeader>
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <CardHeader className="relative">
               <CardTitle>Update Status</CardTitle>
               <Button
                 variant="ghost"
                 size="sm"
                 className="absolute top-2 right-2"
-                onClick={() => setSelectedReport(null)}
+                onClick={() => {
+                  setSelectedReport(null);
+                  setUpdateStatus('');
+                  setTechNotes('');
+                  setEstimatedResolution('');
+                  setWorkPhotos([]);
+                }}
               >
-                ×
+                <X className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -703,11 +827,11 @@ export const TechnicianDashboard = () => {
                     <SelectValue placeholder="Select action" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="start-work">Start Work</SelectItem>
+                    {selectedReport.status === 'verified' && (
+                      <SelectItem value="start-work">Start Work</SelectItem>
+                    )}
                     <SelectItem value="complete">Mark Complete</SelectItem>
-                    <SelectItem value="rejected">
-                      Report Issue/Unable to Complete
-                    </SelectItem>
+                    <SelectItem value="rejected">Unable to Complete</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -722,20 +846,49 @@ export const TechnicianDashboard = () => {
                 />
               </div>
 
-              {workPhotos.length > 0 && (
+              {(updateStatus === 'start-work' ||
+                updateStatus === 'complete') && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Work Photos</label>
+                  <label className="text-sm font-medium">
+                    Estimated Resolution Time
+                  </label>
+                  <Input
+                    placeholder="e.g., 2 hours, Tomorrow, Within 3 days"
+                    value={estimatedResolution}
+                    onChange={(e) => setEstimatedResolution(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Work Photos (Optional)
+                </label>
+                <Input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="cursor-pointer"
+                />
+                {workPhotos.length > 0 && (
                   <p className="text-sm text-muted-foreground">
                     {workPhotos.length} photo(s) selected
                   </p>
-                </div>
-              )}
+                )}
+              </div>
 
               <div className="flex space-x-2">
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => setSelectedReport(null)}
+                  onClick={() => {
+                    setSelectedReport(null);
+                    setUpdateStatus('');
+                    setTechNotes('');
+                    setEstimatedResolution('');
+                    setWorkPhotos([]);
+                  }}
                 >
                   Cancel
                 </Button>
@@ -762,6 +915,15 @@ export const TechnicianDashboard = () => {
                   </Badge>
                 </div>
                 <div>
+                  <p className="text-sm font-medium">Current Status</p>
+                  <div className="flex items-center space-x-2">
+                    {getStatusIcon(selectedReport.status)}
+                    <span className="text-sm capitalize">
+                      {selectedReport.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+                <div>
                   <p className="text-sm font-medium">Reported</p>
                   <p className="text-sm text-muted-foreground">
                     {formatDate(selectedReport.createdAt)} by{' '}
@@ -774,6 +936,29 @@ export const TechnicianDashboard = () => {
                     <p className="text-sm text-muted-foreground">
                       {selectedReport.upvotes.length} community members affected
                     </p>
+                  </div>
+                )}
+                {selectedReport.estimatedResolution && (
+                  <div>
+                    <p className="text-sm font-medium">Estimated Resolution</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedReport.estimatedResolution}
+                    </p>
+                  </div>
+                )}
+                {selectedReport.comments.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium">Recent Comments</p>
+                    <div className="max-h-32 overflow-y-auto space-y-2">
+                      {selectedReport.comments.slice(-3).map((comment) => (
+                        <div key={comment._id} className="text-xs">
+                          <p className="font-medium">{comment.user.name}</p>
+                          <p className="text-muted-foreground">
+                            {comment.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 <Button
