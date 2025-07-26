@@ -446,6 +446,16 @@ export const AdminDashboard = () => {
   const handleAssignReport = async (reportId, assignedToId) => {
     try {
       setLoading(true);
+
+      // Get the current report to check its status
+      const currentReport = reports.find((r) => r._id === reportId);
+
+      // If the report is not verified, verify it first
+      if (currentReport && currentReport.status !== 'verified') {
+        await apiService.reports.verifyReport(reportId);
+      }
+
+      // Then assign the report
       await apiService.reports.assignReport(reportId, {
         technicianId: assignedToId,
       });
