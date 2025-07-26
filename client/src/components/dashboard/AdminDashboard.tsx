@@ -81,6 +81,16 @@ const Textarea = ({ className, ...props }) => (
   />
 );
 
+const Alert = ({ children, className }) => (
+  <div
+    className={`p-4 rounded-md border ${
+      className || 'bg-red-50 border-red-200 text-red-800'
+    }`}
+  >
+    {children}
+  </div>
+);
+
 import {
   BarChart3,
   Users,
@@ -110,85 +120,111 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
 } from 'lucide-react';
 
-// Mock data - replace with actual API calls
-const mockReports = [
-  {
-    _id: '1',
-    title: 'Water pipe burst on Main Street',
-    description: 'Large water pipe has burst causing flooding',
-    category: 'broken_pipe',
-    status: 'pending',
-    urgency: 'critical',
-    address: '123 Main Street, Downtown',
-    reportedBy: { _id: '1', name: 'John Doe', email: 'john@example.com' },
-    assignedTo: null,
-    createdAt: '2024-01-20T10:30:00Z',
-    updatedAt: '2024-01-20T10:30:00Z',
-    upvotes: ['1', '2', '3'],
-    comments: [
-      { text: 'This needs immediate attention', author: 'Jane Smith' },
-    ],
-    location: { lat: -1.2921, lng: 36.8219 },
-  },
-  {
-    _id: '2',
-    title: 'No water supply in residential area',
-    description: 'Water shortage affecting entire neighborhood',
-    category: 'water_shortage',
-    status: 'in_progress',
-    urgency: 'high',
-    address: '456 Oak Avenue, Suburbs',
-    reportedBy: { _id: '2', name: 'Jane Smith', email: 'jane@example.com' },
-    assignedTo: { _id: '3', name: 'Tech Team A', email: 'teama@water.gov' },
-    createdAt: '2024-01-19T14:15:00Z',
-    updatedAt: '2024-01-20T09:00:00Z',
-    upvotes: ['1', '4'],
-    comments: [],
-    location: { lat: -1.3021, lng: 36.8319 },
-  },
-];
+// API service
+const API_BASE_URL = 'http://localhost:5000/api';
 
-const mockUsers = [
-  {
-    _id: '1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    role: 'citizen',
-    status: 'active',
-    joinedAt: '2024-01-15T00:00:00Z',
-    reportsCount: 5,
-    lastActive: '2024-01-20T10:30:00Z',
+const apiService = {
+  // Get auth token from storage (you'll need to implement this based on your auth system)
+  getAuthToken: () => {
+    return localStorage.getItem('tukomaji_token');
   },
-  {
-    _id: '2',
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    role: 'citizen',
-    status: 'active',
-    joinedAt: '2024-01-10T00:00:00Z',
-    reportsCount: 3,
-    lastActive: '2024-01-19T14:15:00Z',
+
+  // Generic API call with error handling
+  apiCall: async (endpoint, options = {}) => {
+    const token = apiService.getAuthToken();
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'API call failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`API call failed for ${endpoint}:`, error);
+      throw error;
+    }
   },
-  {
-    _id: '3',
-    name: 'Tech Team A',
-    email: 'teama@water.gov',
-    role: 'technician',
-    status: 'active',
-    joinedAt: '2024-01-01T00:00:00Z',
-    reportsCount: 0,
-    lastActive: '2024-01-20T09:00:00Z',
+
+  // Reports API
+  reports: {
+    getAll: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiService.apiCall(
+        `/reports${queryString ? `?${queryString}` : ''}`
+      );
+    },
+
+    getById: (id) => apiService.apiCall(`/reports/${id}`),
+
+    updateStatus: (id, statusData) =>
+      apiService.apiCall(`/reports/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify(statusData),
+      }),
+
+    assignReport: (id, assignData) =>
+      apiService.apiCall(`/reports/${id}/assign`, {
+        method: 'PATCH',
+        body: JSON.stringify(assignData),
+      }),
+
+    verifyReport: (id) =>
+      apiService.apiCall(`/reports/${id}/verify`, {
+        method: 'PATCH',
+      }),
+
+    rejectReport: (id, reason) =>
+      apiService.apiCall(`/reports/${id}/reject`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason }),
+      }),
   },
-];
+
+  // Users API (you'll need to create these endpoints)
+  users: {
+    getAll: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiService.apiCall(
+        `/users${queryString ? `?${queryString}` : ''}`
+      );
+    },
+
+    getById: (id) => apiService.apiCall(`/users/${id}`),
+
+    update: (id, updateData) =>
+      apiService.apiCall(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      }),
+
+    delete: (id) =>
+      apiService.apiCall(`/users/${id}`, {
+        method: 'DELETE',
+      }),
+  },
+};
 
 export const AdminDashboard = () => {
-  const [reports, setReports] = useState(mockReports);
-  const [users, setUsers] = useState(mockUsers);
-  const [filteredReports, setFilteredReports] = useState(mockReports);
-  const [filteredUsers, setFilteredUsers] = useState(mockUsers);
+  const [reports, setReports] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [filteredReports, setFilteredReports] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Mobile state
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -213,6 +249,38 @@ export const AdminDashboard = () => {
     assignedTo: '',
   });
 
+  // Load initial data
+  useEffect(() => {
+    loadReports();
+    loadUsers();
+  }, []);
+
+  const loadReports = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const reportsData = await apiService.reports.getAll({ limit: 100 });
+      setReports(Array.isArray(reportsData) ? reportsData : []);
+    } catch (error) {
+      console.error('Failed to load reports:', error);
+      setError('Failed to load reports: ' + error.message);
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const usersData = await apiService.users.getAll();
+      setUsers(Array.isArray(usersData) ? usersData : []);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      // Don't show error for users if reports loaded successfully
+      setUsers([]);
+    }
+  };
+
   // Calculate statistics
   const stats = {
     totalReports: reports.length,
@@ -221,8 +289,9 @@ export const AdminDashboard = () => {
     inProgressReports: reports.filter((r) => r.status === 'in_progress').length,
     verifiedReports: reports.filter((r) => r.status === 'verified').length,
     rejectedReports: reports.filter((r) => r.status === 'rejected').length,
-    activeUsers: users.filter((u) => u.status === 'active').length,
-    avgResponseTime: 4.2,
+    activeUsers: users.filter((u) => u.status === 'active' || u.isActive)
+      .length,
+    avgResponseTime: 4.2, // This would need to be calculated from actual data
     categoryBreakdown: reports.reduce((acc, report) => {
       acc[report.category] = (acc[report.category] || 0) + 1;
       return acc;
@@ -309,7 +378,10 @@ export const AdminDashboard = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+
     const now = new Date();
     const diffInHours = Math.floor(
       (now.getTime() - date.getTime()) / (1000 * 60 * 60)
@@ -321,49 +393,107 @@ export const AdminDashboard = () => {
     return date.toLocaleDateString();
   };
 
-  const handleUpdateReportStatus = (reportId, newStatus) => {
-    setReports((prev) =>
-      prev.map((report) =>
-        report._id === reportId
-          ? {
-              ...report,
-              status: newStatus,
-              updatedAt: new Date().toISOString(),
-            }
-          : report
-      )
-    );
+  const handleUpdateReportStatus = async (reportId, newStatus) => {
+    try {
+      setLoading(true);
+      await apiService.reports.updateStatus(reportId, { status: newStatus });
+
+      // Update local state
+      setReports((prev) =>
+        prev.map((report) =>
+          report._id === reportId
+            ? {
+                ...report,
+                status: newStatus,
+                updatedAt: new Date().toISOString(),
+              }
+            : report
+        )
+      );
+
+      // If dialog is open, update selected report
+      if (selectedReport && selectedReport._id === reportId) {
+        setSelectedReport((prev) => ({ ...prev, status: newStatus }));
+      }
+    } catch (error) {
+      console.error('Failed to update report status:', error);
+      setError('Failed to update report status: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAssignReport = (reportId, assignedTo) => {
-    setReports((prev) =>
-      prev.map((report) =>
-        report._id === reportId
-          ? {
-              ...report,
-              assignedTo: users.find((u) => u._id === assignedTo) || null,
-              status: 'in_progress',
-              updatedAt: new Date().toISOString(),
-            }
-          : report
-      )
-    );
-    setIsAssignDialogOpen(false);
+  const handleAssignReport = async (reportId, assignedToId) => {
+    try {
+      setLoading(true);
+      await apiService.reports.assignReport(reportId, {
+        technicianId: assignedToId,
+      });
+
+      // Reload reports to get updated data
+      await loadReports();
+      setIsAssignDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to assign report:', error);
+      setError('Failed to assign report: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateUser = (userId, updates) => {
-    setUsers((prev) =>
-      prev.map((user) => (user._id === userId ? { ...user, ...updates } : user))
-    );
+  const handleUpdateUser = async (userId, updates) => {
+    try {
+      setLoading(true);
+      await apiService.users.update(userId, updates);
+
+      // Update local state
+      setUsers((prev) =>
+        prev.map((user) =>
+          user._id === userId ? { ...user, ...updates } : user
+        )
+      );
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      setError('Failed to update user: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+
+    try {
+      setLoading(true);
+      await apiService.users.delete(userId);
+
+      // Update local state
+      setUsers((prev) => prev.filter((u) => u._id !== userId));
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      setError('Failed to delete user: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const exportData = (type) => {
     const data = type === 'reports' ? filteredReports : filteredUsers;
+    if (data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
     const csv = [
       Object.keys(data[0] || {}).join(','),
       ...data.map((item) =>
         Object.values(item)
-          .map((val) => (typeof val === 'object' ? JSON.stringify(val) : val))
+          .map((val) => {
+            if (typeof val === 'object' && val !== null) {
+              return JSON.stringify(val).replace(/"/g, '""');
+            }
+            return String(val).replace(/"/g, '""');
+          })
           .join(',')
       ),
     ].join('\n');
@@ -388,8 +518,19 @@ export const AdminDashboard = () => {
         <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
         <div className="flex flex-col sm:flex-row gap-2">
           <Button
+            onClick={() => loadReports()}
+            disabled={loading}
+            className="w-full sm:w-auto"
+          >
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`}
+            />
+            Refresh
+          </Button>
+          <Button
             onClick={() => exportData('reports')}
             className="w-full sm:w-auto"
+            disabled={filteredReports.length === 0}
           >
             <Download className="h-4 w-4 mr-2" />
             Export Reports
@@ -398,12 +539,28 @@ export const AdminDashboard = () => {
             onClick={() => exportData('users')}
             variant="outline"
             className="w-full sm:w-auto"
+            disabled={filteredUsers.length === 0}
           >
             <Download className="h-4 w-4 mr-2" />
             Export Users
           </Button>
         </div>
       </div>
+
+      {error && (
+        <Alert className="mb-4">
+          <AlertTriangle className="h-4 w-4 mr-2" />
+          {error}
+          <Button
+            onClick={() => setError(null)}
+            variant="outline"
+            size="sm"
+            className="ml-2"
+          >
+            Dismiss
+          </Button>
+        </Alert>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -478,13 +635,13 @@ export const AdminDashboard = () => {
       <Tabs defaultValue="reports" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="reports" className="text-xs sm:text-sm">
-            Reports
+            Reports ({filteredReports.length})
           </TabsTrigger>
           <TabsTrigger value="analytics" className="text-xs sm:text-sm">
             Analytics
           </TabsTrigger>
           <TabsTrigger value="users" className="text-xs sm:text-sm">
-            Users
+            Users ({filteredUsers.length})
           </TabsTrigger>
         </TabsList>
 
@@ -538,9 +695,9 @@ export const AdminDashboard = () => {
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="verified">Verified</SelectItem>
                       <SelectItem value="in_progress">In Progress</SelectItem>
                       <SelectItem value="resolved">Resolved</SelectItem>
-                      <SelectItem value="verified">Verified</SelectItem>
                       <SelectItem value="rejected">Rejected</SelectItem>
                     </SelectContent>
                   </Select>
@@ -604,106 +761,120 @@ export const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {filteredReports.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    No reports found
-                  </p>
-                ) : (
-                  filteredReports.map((report) => (
-                    <div
-                      key={report._id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors space-y-3 sm:space-y-0"
-                    >
-                      <div className="flex items-start sm:items-center space-x-3 flex-1">
-                        <div
-                          className={`w-3 h-3 rounded-full ${getPriorityColor(
-                            report.urgency
-                          )} mt-1 sm:mt-0 flex-shrink-0`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 mb-1">
-                            <p className="font-medium text-sm sm:text-base truncate">
-                              {report.title}
-                            </p>
-                            <Badge variant="outline" className="text-xs w-fit">
-                              {getCategoryLabel(report.category)}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm text-muted-foreground">
-                            <span className="flex items-center space-x-1">
-                              <MapPin className="h-3 w-3 flex-shrink-0" />
-                              <span className="truncate">{report.address}</span>
-                            </span>
-                            <span className="flex items-center space-x-1">
-                              <Users className="h-3 w-3 flex-shrink-0" />
-                              <span className="truncate">
-                                {report.reportedBy.name}
-                              </span>
-                            </span>
-                            <div className="flex items-center space-x-3">
+              {loading && reports.length === 0 ? (
+                <div className="text-center py-8">
+                  <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">Loading reports...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredReports.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      {reports.length === 0
+                        ? 'No reports available'
+                        : 'No reports match your filters'}
+                    </p>
+                  ) : (
+                    filteredReports.map((report) => (
+                      <div
+                        key={report._id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors space-y-3 sm:space-y-0"
+                      >
+                        <div className="flex items-start sm:items-center space-x-3 flex-1">
+                          <div
+                            className={`w-3 h-3 rounded-full ${getPriorityColor(
+                              report.urgency
+                            )} mt-1 sm:mt-0 flex-shrink-0`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 mb-1">
+                              <p className="font-medium text-sm sm:text-base truncate">
+                                {report.title}
+                              </p>
+                              <Badge
+                                variant="outline"
+                                className="text-xs w-fit"
+                              >
+                                {getCategoryLabel(report.category)}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm text-muted-foreground">
                               <span className="flex items-center space-x-1">
-                                <ThumbsUp className="h-3 w-3" />
-                                <span>{report.upvotes.length}</span>
+                                <MapPin className="h-3 w-3 flex-shrink-0" />
+                                <span className="truncate">
+                                  {report.address}
+                                </span>
                               </span>
                               <span className="flex items-center space-x-1">
-                                <MessageSquare className="h-3 w-3" />
-                                <span>{report.comments.length}</span>
+                                <Users className="h-3 w-3 flex-shrink-0" />
+                                <span className="truncate">
+                                  {report.reportedBy?.name || 'Unknown'}
+                                </span>
                               </span>
+                              <div className="flex items-center space-x-3">
+                                <span className="flex items-center space-x-1">
+                                  <ThumbsUp className="h-3 w-3" />
+                                  <span>{report.upvotes?.length || 0}</span>
+                                </span>
+                                <span className="flex items-center space-x-1">
+                                  <MessageSquare className="h-3 w-3" />
+                                  <span>{report.comments?.length || 0}</span>
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
-                        <div className="flex items-center justify-between sm:justify-start">
-                          <div className="flex items-center space-x-1">
-                            {getStatusIcon(report.status)}
-                            <span className="text-xs sm:text-sm capitalize">
-                              {report.status.replace('_', ' ')}
+                        <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+                          <div className="flex items-center justify-between sm:justify-start">
+                            <div className="flex items-center space-x-1">
+                              {getStatusIcon(report.status)}
+                              <span className="text-xs sm:text-sm capitalize">
+                                {report.status.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground sm:hidden">
+                              {formatDate(report.createdAt)}
                             </span>
                           </div>
-                          <span className="text-xs text-muted-foreground sm:hidden">
+                          <span className="text-xs text-muted-foreground hidden sm:block">
                             {formatDate(report.createdAt)}
                           </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground hidden sm:block">
-                          {formatDate(report.createdAt)}
-                        </span>
-                        <div className="flex space-x-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedReport(report);
-                              setIsReportDialogOpen(true);
-                            }}
-                            className="flex-1 sm:flex-none"
-                          >
-                            <Eye className="h-3 w-3 sm:mr-0 mr-1" />
-                            <span className="sm:hidden">View</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setAssignmentData({
-                                reportId: report._id,
-                                assignedTo: report.assignedTo?._id || '',
-                              });
-                              setIsAssignDialogOpen(true);
-                            }}
-                            disabled={report.status === 'resolved'}
-                            className="flex-1 sm:flex-none"
-                          >
-                            <Settings className="h-3 w-3 sm:mr-0 mr-1" />
-                            <span className="sm:hidden">Assign</span>
-                          </Button>
+                          <div className="flex space-x-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedReport(report);
+                                setIsReportDialogOpen(true);
+                              }}
+                              className="flex-1 sm:flex-none"
+                            >
+                              <Eye className="h-3 w-3 sm:mr-0 mr-1" />
+                              <span className="sm:hidden">View</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setAssignmentData({
+                                  reportId: report._id,
+                                  assignedTo: report.assignedTo?._id || '',
+                                });
+                                setIsAssignDialogOpen(true);
+                              }}
+                              disabled={report.status === 'resolved' || loading}
+                              className="flex-1 sm:flex-none"
+                            >
+                              <Settings className="h-3 w-3 sm:mr-0 mr-1" />
+                              <span className="sm:hidden">Assign</span>
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -720,31 +891,37 @@ export const AdminDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {Object.entries(stats.categoryBreakdown).map(
-                    ([category, count]) => {
-                      const percentage =
-                        stats.totalReports > 0
-                          ? Math.round((count / stats.totalReports) * 100)
-                          : 0;
-                      return (
-                        <div
-                          key={category}
-                          className="flex justify-between items-center"
-                        >
-                          <span className="text-sm truncate pr-2">
-                            {getCategoryLabel(category)}
-                          </span>
-                          <div className="flex items-center space-x-2 flex-shrink-0">
-                            <span className="text-sm text-muted-foreground">
-                              {count}
+                  {Object.entries(stats.categoryBreakdown).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No data available
+                    </p>
+                  ) : (
+                    Object.entries(stats.categoryBreakdown).map(
+                      ([category, count]) => {
+                        const percentage =
+                          stats.totalReports > 0
+                            ? Math.round((count / stats.totalReports) * 100)
+                            : 0;
+                        return (
+                          <div
+                            key={category}
+                            className="flex justify-between items-center"
+                          >
+                            <span className="text-sm truncate pr-2">
+                              {getCategoryLabel(category)}
                             </span>
-                            <Badge variant="secondary" className="text-xs">
-                              {percentage}%
-                            </Badge>
+                            <div className="flex items-center space-x-2 flex-shrink-0">
+                              <span className="text-sm text-muted-foreground">
+                                {count}
+                              </span>
+                              <Badge variant="secondary" className="text-xs">
+                                {percentage}%
+                              </Badge>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    }
+                        );
+                      }
+                    )
                   )}
                 </div>
               </CardContent>
@@ -759,38 +936,44 @@ export const AdminDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {Object.entries(stats.urgencyBreakdown).map(
-                    ([urgency, count]) => {
-                      const percentage =
-                        stats.totalReports > 0
-                          ? Math.round((count / stats.totalReports) * 100)
-                          : 0;
-                      return (
-                        <div
-                          key={urgency}
-                          className="flex justify-between items-center"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <div
-                              className={`w-3 h-3 rounded-full ${getPriorityColor(
-                                urgency
-                              )}`}
-                            />
-                            <span className="capitalize text-sm">
-                              {urgency}
-                            </span>
+                  {Object.entries(stats.urgencyBreakdown).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No data available
+                    </p>
+                  ) : (
+                    Object.entries(stats.urgencyBreakdown).map(
+                      ([urgency, count]) => {
+                        const percentage =
+                          stats.totalReports > 0
+                            ? Math.round((count / stats.totalReports) * 100)
+                            : 0;
+                        return (
+                          <div
+                            key={urgency}
+                            className="flex justify-between items-center"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <div
+                                className={`w-3 h-3 rounded-full ${getPriorityColor(
+                                  urgency
+                                )}`}
+                              />
+                              <span className="capitalize text-sm">
+                                {urgency}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2 flex-shrink-0">
+                              <span className="text-sm text-muted-foreground">
+                                {count}
+                              </span>
+                              <Badge variant="secondary" className="text-xs">
+                                {percentage}%
+                              </Badge>
+                            </div>
                           </div>
-                          <div className="flex items-center space-x-2 flex-shrink-0">
-                            <span className="text-sm text-muted-foreground">
-                              {count}
-                            </span>
-                            <Badge variant="secondary" className="text-xs">
-                              {percentage}%
-                            </Badge>
-                          </div>
-                        </div>
-                      );
-                    }
+                        );
+                      }
+                    )
                   )}
                 </div>
               </CardContent>
@@ -945,6 +1128,7 @@ export const AdminDashboard = () => {
                       <SelectItem value="citizen">Citizens</SelectItem>
                       <SelectItem value="technician">Technicians</SelectItem>
                       <SelectItem value="admin">Administrators</SelectItem>
+                      <SelectItem value="verifier">Verifiers</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -953,6 +1137,7 @@ export const AdminDashboard = () => {
                     onClick={() => exportData('users')}
                     variant="outline"
                     className="w-full"
+                    disabled={filteredUsers.length === 0}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Export Users
@@ -977,7 +1162,9 @@ export const AdminDashboard = () => {
               <div className="space-y-4">
                 {filteredUsers.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    No users found
+                    {users.length === 0
+                      ? 'No users available'
+                      : 'No users match your filters'}
                   </p>
                 ) : (
                   filteredUsers.map((user) => (
@@ -987,12 +1174,12 @@ export const AdminDashboard = () => {
                     >
                       <div className="flex items-start sm:items-center space-x-4">
                         <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-medium flex-shrink-0">
-                          {user.name.charAt(0).toUpperCase()}
+                          {user.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
                             <p className="font-medium text-sm sm:text-base truncate">
-                              {user.name}
+                              {user.name || 'Unknown'}
                             </p>
                             <div className="flex flex-wrap gap-1">
                               <Badge
@@ -1005,36 +1192,45 @@ export const AdminDashboard = () => {
                                 }
                                 className="text-xs"
                               >
-                                {user.role}
+                                {user.role || 'citizen'}
                               </Badge>
                               <Badge
                                 variant={
-                                  user.status === 'active'
+                                  user.status === 'active' || user.isActive
                                     ? 'default'
                                     : 'destructive'
                                 }
                                 className="text-xs"
                               >
-                                {user.status}
+                                {user.status ||
+                                  (user.isActive ? 'active' : 'inactive')}
                               </Badge>
                             </div>
                           </div>
                           <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm text-muted-foreground">
                             <span className="flex items-center space-x-1">
                               <Mail className="h-3 w-3 flex-shrink-0" />
-                              <span className="truncate">{user.email}</span>
+                              <span className="truncate">
+                                {user.email || 'No email'}
+                              </span>
                             </span>
                             <span className="flex items-center space-x-1">
                               <Calendar className="h-3 w-3 flex-shrink-0" />
-                              <span>Joined {formatDate(user.joinedAt)}</span>
+                              <span>
+                                Joined{' '}
+                                {formatDate(user.createdAt || user.joinedAt)}
+                              </span>
                             </span>
-                            <span>{user.reportsCount} reports</span>
+                            <span>
+                              {user.reportsCount || user.points || 0} points
+                            </span>
                           </div>
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
                         <span className="text-xs text-muted-foreground text-center sm:text-left">
-                          Last active {formatDate(user.lastActive)}
+                          Last active{' '}
+                          {formatDate(user.lastActive || user.updatedAt)}
                         </span>
                         <div className="flex space-x-1">
                           <Button
@@ -1064,17 +1260,8 @@ export const AdminDashboard = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  'Are you sure you want to delete this user?'
-                                )
-                              ) {
-                                setUsers((prev) =>
-                                  prev.filter((u) => u._id !== user._id)
-                                );
-                              }
-                            }}
+                            onClick={() => handleDeleteUser(user._id)}
+                            disabled={loading}
                             className="flex-1 sm:flex-none"
                           >
                             <Trash2 className="h-3 w-3 sm:mr-0 mr-1" />
@@ -1154,9 +1341,9 @@ export const AdminDashboard = () => {
                 <div>
                   <Label className="text-sm font-medium">Reported By</Label>
                   <div className="text-sm bg-muted p-2 rounded">
-                    <p>{selectedReport.reportedBy.name}</p>
+                    <p>{selectedReport.reportedBy?.name || 'Unknown'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {selectedReport.reportedBy.email}
+                      {selectedReport.reportedBy?.email || 'No email'}
                     </p>
                   </div>
                 </div>
@@ -1182,47 +1369,56 @@ export const AdminDashboard = () => {
                 <div>
                   <Label className="text-sm font-medium">Upvotes</Label>
                   <p className="text-sm bg-muted p-2 rounded">
-                    {selectedReport.upvotes.length}
+                    {selectedReport.upvotes?.length || 0}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Comments</Label>
                   <p className="text-sm bg-muted p-2 rounded">
-                    {selectedReport.comments.length}
+                    {selectedReport.comments?.length || 0}
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                <Select
-                  value={selectedReport.status}
-                  onValueChange={(value) => {
-                    handleUpdateReportStatus(selectedReport._id, value);
-                    setSelectedReport({ ...selectedReport, status: value });
-                  }}
-                >
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                    <SelectItem value="verified">Verified</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  onClick={() => {
-                    setAssignmentData({
-                      reportId: selectedReport._id,
-                      assignedTo: selectedReport.assignedTo?._id || '',
-                    });
-                    setIsAssignDialogOpen(true);
-                  }}
-                  className="w-full sm:w-auto"
-                >
-                  {selectedReport.assignedTo ? 'Reassign' : 'Assign'}
-                </Button>
+
+              {/* Status Update Section */}
+              <div className="border-t pt-4">
+                <Label className="text-sm font-medium mb-2 block">
+                  Update Status
+                </Label>
+                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                  <Select
+                    value={selectedReport.status}
+                    onValueChange={(value) => {
+                      handleUpdateReportStatus(selectedReport._id, value);
+                    }}
+                    disabled={loading}
+                  >
+                    <SelectTrigger className="w-full sm:w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="verified">Verified</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={() => {
+                      setAssignmentData({
+                        reportId: selectedReport._id,
+                        assignedTo: selectedReport.assignedTo?._id || '',
+                      });
+                      setIsAssignDialogOpen(true);
+                    }}
+                    disabled={loading}
+                    className="w-full sm:w-auto"
+                  >
+                    {selectedReport.assignedTo ? 'Reassign' : 'Assign'}{' '}
+                    Technician
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -1270,6 +1466,7 @@ export const AdminDashboard = () => {
               variant="outline"
               onClick={() => setIsAssignDialogOpen(false)}
               className="w-full sm:w-auto"
+              disabled={loading}
             >
               Cancel
             </Button>
@@ -1280,10 +1477,10 @@ export const AdminDashboard = () => {
                   assignmentData.assignedTo
                 )
               }
-              disabled={!assignmentData.assignedTo}
+              disabled={!assignmentData.assignedTo || loading}
               className="w-full sm:w-auto"
             >
-              Assign
+              {loading ? 'Assigning...' : 'Assign'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1304,7 +1501,7 @@ export const AdminDashboard = () => {
                 <div>
                   <Label>Name</Label>
                   <Input
-                    value={selectedUser.name}
+                    value={selectedUser.name || ''}
                     onChange={(e) =>
                       setSelectedUser({ ...selectedUser, name: e.target.value })
                     }
@@ -1313,7 +1510,7 @@ export const AdminDashboard = () => {
                 <div>
                   <Label>Email</Label>
                   <Input
-                    value={selectedUser.email}
+                    value={selectedUser.email || ''}
                     onChange={(e) =>
                       setSelectedUser({
                         ...selectedUser,
@@ -1327,7 +1524,7 @@ export const AdminDashboard = () => {
                 <div>
                   <Label>Role</Label>
                   <Select
-                    value={selectedUser.role}
+                    value={selectedUser.role || 'citizen'}
                     onValueChange={(value) =>
                       setSelectedUser({ ...selectedUser, role: value })
                     }
@@ -1338,6 +1535,7 @@ export const AdminDashboard = () => {
                     <SelectContent>
                       <SelectItem value="citizen">Citizen</SelectItem>
                       <SelectItem value="technician">Technician</SelectItem>
+                      <SelectItem value="verifier">Verifier</SelectItem>
                       <SelectItem value="admin">Administrator</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1345,9 +1543,16 @@ export const AdminDashboard = () => {
                 <div>
                   <Label>Status</Label>
                   <Select
-                    value={selectedUser.status}
+                    value={
+                      selectedUser.status ||
+                      (selectedUser.isActive ? 'active' : 'inactive')
+                    }
                     onValueChange={(value) =>
-                      setSelectedUser({ ...selectedUser, status: value })
+                      setSelectedUser({
+                        ...selectedUser,
+                        status: value,
+                        isActive: value === 'active',
+                      })
                     }
                   >
                     <SelectTrigger>
@@ -1363,15 +1568,17 @@ export const AdminDashboard = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label>Reports Count</Label>
+                  <Label>Points/Reports Count</Label>
                   <p className="text-sm bg-muted p-2 rounded">
-                    {selectedUser.reportsCount}
+                    {selectedUser.reportsCount || selectedUser.points || 0}
                   </p>
                 </div>
                 <div>
                   <Label>Joined Date</Label>
                   <p className="text-sm bg-muted p-2 rounded">
-                    {formatDate(selectedUser.joinedAt)}
+                    {formatDate(
+                      selectedUser.createdAt || selectedUser.joinedAt
+                    )}
                   </p>
                 </div>
               </div>
@@ -1382,6 +1589,7 @@ export const AdminDashboard = () => {
               variant="outline"
               onClick={() => setIsUserDialogOpen(false)}
               className="w-full sm:w-auto"
+              disabled={loading}
             >
               Cancel
             </Button>
@@ -1393,13 +1601,15 @@ export const AdminDashboard = () => {
                     email: selectedUser.email,
                     role: selectedUser.role,
                     status: selectedUser.status,
+                    isActive: selectedUser.status === 'active',
                   });
                 }
                 setIsUserDialogOpen(false);
               }}
+              disabled={loading}
               className="w-full sm:w-auto"
             >
-              Save Changes
+              {loading ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
