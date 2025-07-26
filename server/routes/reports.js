@@ -112,6 +112,7 @@ router.get('/', async (req, res) => {
       .populate('reportedBy', 'name email')
       .populate('assignedTo', 'name email')
       .populate('verifiedBy', 'name email')
+      .populate('comments.user', 'name email')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
 
@@ -259,6 +260,66 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Self-assign report - NEW ENDPOINT for technicians
+router.patch('/:id/assign', auth, async (req, res) => {
+  try {
+    const { technicianId } = req.body;
+    const allowedRoles = ['admin', 'technician'];
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        message:
+          'Access denied. Only technicians and admins can assign reports.',
+      });
+    }
+
+    const report = await Report.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    // Only allow assignment of verified reports
+    if (report.status !== 'verified') {
+      return res.status(400).json({
+        message: 'Only verified reports can be assigned to technicians',
+      });
+    }
+
+    // Check if already assigned
+    if (report.assignedTo) {
+      return res.status(400).json({
+        message: 'Report is already assigned to a technician',
+      });
+    }
+
+    // For self-assignment, use the requesting user's ID
+    const assigneeId = technicianId || req.user.userId;
+
+    // Verify the assignee is a technician
+    const assignee = await User.findById(assigneeId);
+    if (!assignee || !['technician', 'admin'].includes(assignee.role)) {
+      return res.status(400).json({
+        message: 'Can only assign to technicians or admins',
+      });
+    }
+
+    // Update report assignment
+    report.assignedTo = assigneeId;
+    await report.save();
+
+    // Populate and return updated report
+    await report.populate('reportedBy assignedTo verifiedBy', 'name email');
+
+    res.json({
+      message: 'Report assigned successfully',
+      report,
+    });
+  } catch (error) {
+    console.error('Assign report error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Verify report - Only admin and verifier can verify
 router.patch('/:id/verify', auth, async (req, res) => {
   try {
@@ -395,9 +456,24 @@ router.patch('/:id/status', auth, async (req, res) => {
     }
 
     // Only allow status updates on verified reports (except for admin who can update any)
-    if (req.user.role !== 'admin' && report.status !== 'verified') {
+    if (
+      req.user.role !== 'admin' &&
+      report.status !== 'verified' &&
+      report.status !== 'in_progress'
+    ) {
       return res.status(400).json({
         message: 'Reports must be verified before status can be updated',
+      });
+    }
+
+    // For technicians, ensure they can only update reports assigned to them
+    if (
+      req.user.role === 'technician' &&
+      report.assignedTo &&
+      report.assignedTo.toString() !== req.user.userId
+    ) {
+      return res.status(403).json({
+        message: 'You can only update reports assigned to you',
       });
     }
 
@@ -411,7 +487,12 @@ router.patch('/:id/status', auth, async (req, res) => {
       req.params.id,
       updateData,
       { new: true }
-    ).populate('reportedBy assignedTo verifiedBy', 'name email');
+    ).populate('reportedBy assignedTo verifiedBy comments.user', 'name email');
+
+    // Award points to technician for completing work
+    if (status === 'resolved' && report.assignedTo) {
+      await User.findByIdAndUpdate(report.assignedTo, { $inc: { points: 15 } });
+    }
 
     res.json(updatedReport);
   } catch (error) {
@@ -493,6 +574,53 @@ router.post('/:id/comments', auth, async (req, res) => {
       });
     }
     console.error('Add comment error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get reports assigned to current technician
+router.get('/technician/assigned', auth, async (req, res) => {
+  try {
+    if (!['technician', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        message: 'Access denied. Only technicians can access this endpoint.',
+      });
+    }
+
+    const reports = await Report.find({ assignedTo: req.user.userId })
+      .populate('reportedBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('verifiedBy', 'name email')
+      .populate('comments.user', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json(reports);
+  } catch (error) {
+    console.error('Get assigned reports error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get available reports for assignment
+router.get('/technician/available', auth, async (req, res) => {
+  try {
+    if (!['technician', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        message: 'Access denied. Only technicians can access this endpoint.',
+      });
+    }
+
+    const reports = await Report.find({
+      status: 'verified',
+      assignedTo: { $exists: false },
+    })
+      .populate('reportedBy', 'name email')
+      .populate('verifiedBy', 'name email')
+      .sort({ urgency: 1, createdAt: -1 }); // Sort by urgency first, then by date
+
+    res.json(reports);
+  } catch (error) {
+    console.error('Get available reports error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
