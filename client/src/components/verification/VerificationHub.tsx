@@ -17,6 +17,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import {
   CheckCircle,
   X,
   Camera,
@@ -25,6 +33,8 @@ import {
   Users,
   AlertTriangle,
   Clock,
+  Eye,
+  Menu,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import api from '@/lib/api';
@@ -111,6 +121,7 @@ export const VerificationHub = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [stats, setStats] = useState<UserStats>({
     totalVerified: 0,
     weeklyVerified: 0,
@@ -222,10 +233,11 @@ export const VerificationHub = () => {
         userPoints: prev.userPoints + pointsAwarded,
       }));
 
-      // Reset form
+      // Reset form and close sheet on mobile
       setSelectedReport(null);
       setVerificationNotes('');
       setSeverity('');
+      setSheetOpen(false);
     } catch (err: any) {
       console.error('Verification error:', err);
 
@@ -261,6 +273,165 @@ export const VerificationHub = () => {
       });
     }
   };
+
+  const handleReportSelect = (report: PendingReport) => {
+    setSelectedReport(report);
+    setSheetOpen(true);
+  };
+
+  const VerificationPanel = () => (
+    <div className="space-y-4">
+      <div>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Badge variant="outline">{selectedReport?.category}</Badge>
+          <Badge className={getUrgencyColor(selectedReport?.urgency || '')}>
+            {selectedReport?.urgency}
+          </Badge>
+        </div>
+        <h4 className="font-medium mb-2 text-lg">{selectedReport?.title}</h4>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {selectedReport?.description}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <h4 className="font-medium">Location</h4>
+        <p className="text-sm text-muted-foreground">
+          {selectedReport?.address}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Coordinates:{' '}
+          {selectedReport ? formatLocation(selectedReport.location) : ''}
+        </p>
+      </div>
+
+      {selectedReport && selectedReport.media.length > 0 && (
+        <div className="space-y-3">
+          <h4 className="font-medium">Attached Media</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {selectedReport.media.map((mediaUrl, index) => (
+              <div
+                key={index}
+                className="aspect-video bg-muted rounded-lg flex items-center justify-center relative overflow-hidden"
+              >
+                {mediaUrl.toLowerCase().includes('image') ||
+                mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                  <img
+                    src={mediaUrl}
+                    alt={`Report media ${index + 1}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      target.nextElementSibling!.classList.remove('hidden');
+                    }}
+                  />
+                ) : null}
+                <Camera className="h-6 w-6 text-muted-foreground hidden" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Severity Assessment</label>
+        <Select value={severity} onValueChange={setSeverity}>
+          <SelectTrigger>
+            <SelectValue placeholder="Rate severity (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">1 - Minor issue</SelectItem>
+            <SelectItem value="2">2 - Moderate</SelectItem>
+            <SelectItem value="3">3 - Significant</SelectItem>
+            <SelectItem value="4">4 - Major problem</SelectItem>
+            <SelectItem value="5">5 - Critical/Emergency</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          Verification Notes
+          <span className="text-red-500 ml-1">*</span>
+          <span className="text-xs text-muted-foreground ml-1">
+            (Required for rejection)
+          </span>
+        </label>
+        <Textarea
+          placeholder="Add your verification notes, additional observations, or context..."
+          value={verificationNotes}
+          onChange={(e) => setVerificationNotes(e.target.value)}
+          rows={4}
+          className="min-h-[100px]"
+        />
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
+        <Button
+          className="flex-1"
+          onClick={() => handleVerification('verify')}
+          disabled={submitting}
+        >
+          <CheckCircle className="h-4 w-4 mr-2" />
+          {submitting ? 'Processing...' : 'Verify (+10 pts)'}
+        </Button>
+        <Button
+          variant="outline"
+          className="flex-1"
+          onClick={() => handleVerification('reject')}
+          disabled={submitting}
+        >
+          <X className="h-4 w-4 mr-2" />
+          {submitting ? 'Processing...' : 'Reject (+5 pts)'}
+        </Button>
+      </div>
+
+      {selectedReport && (
+        <Card className="mt-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Report Info</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 gap-2 text-sm">
+              <p>
+                <strong>Reported by:</strong> {selectedReport.reportedBy.name}
+              </p>
+              <p>
+                <strong>Date:</strong> {formatDate(selectedReport.createdAt)}
+              </p>
+              <p>
+                <strong>Community votes:</strong>{' '}
+                {selectedReport.upvotes.length}
+              </p>
+              <p>
+                <strong>Comments:</strong> {selectedReport.comments.length}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-2">
+              <Button variant="outline" size="sm" className="w-full">
+                <MapPin className="h-3 w-3 mr-2" />
+                View on Map
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  const comment = prompt('Add a comment:');
+                  if (comment?.trim()) {
+                    addComment(selectedReport._id, comment.trim());
+                  }
+                }}
+              >
+                Add Comment
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 
   if (!canVerify) {
     return (
@@ -319,66 +490,82 @@ export const VerificationHub = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Verification Hub</h1>
-        <div className="flex items-center space-x-4">
+    <div className="max-w-7xl mx-auto p-4 space-y-4 md:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Verification Hub</h1>
+        <div className="flex items-center space-x-2 md:space-x-4">
           <Badge variant="secondary" className="flex items-center space-x-1">
             <Award className="h-3 w-3" />
             <span>{stats.userPoints} Points</span>
           </Badge>
-          <Badge variant="outline">
+          <Badge variant="outline" className="text-xs">
             {user?.role === 'admin' ? 'Administrator' : 'Community Verifier'}
           </Badge>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Stats - Responsive Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-xs md:text-sm font-medium">
               Pending Verification
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{pendingReports.length}</div>
+            <div className="text-xl md:text-2xl font-bold">
+              {pendingReports.length}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-xs md:text-sm font-medium">
               Verified This Week
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.weeklyVerified}</div>
+            <div className="text-xl md:text-2xl font-bold">
+              {stats.weeklyVerified}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Accuracy Rate</CardTitle>
+            <CardTitle className="text-xs md:text-sm font-medium">
+              Accuracy Rate
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.accuracyRate}%</div>
+            <div className="text-xl md:text-2xl font-bold">
+              {stats.accuracyRate}%
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Points Earned</CardTitle>
+            <CardTitle className="text-xs md:text-sm font-medium">
+              Points Earned
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+{stats.pointsEarned}</div>
+            <div className="text-xl md:text-2xl font-bold">
+              +{stats.pointsEarned}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Content - Mobile First Design */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+        {/* Reports List */}
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Reports Awaiting Verification</CardTitle>
+              <CardTitle className="text-lg md:text-xl">
+                Reports Awaiting Verification
+              </CardTitle>
               <CardDescription>
                 Help verify water issue reports from the community
               </CardDescription>
@@ -393,54 +580,73 @@ export const VerificationHub = () => {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 md:space-y-4">
                   {pendingReports.map((report) => (
                     <div
                       key={report._id}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
-                        selectedReport?._id === report._id
-                          ? 'border-primary bg-muted/50'
-                          : ''
-                      }`}
-                      onClick={() => setSelectedReport(report)}
+                      className="p-3 md:p-4 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50"
+                      onClick={() => handleReportSelect(report)}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <Badge variant="outline">{report.category}</Badge>
-                            <Badge className={getUrgencyColor(report.urgency)}>
-                              {report.urgency}
-                            </Badge>
-                            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                              <Users className="h-3 w-3" />
-                              <span>{report.upvotes.length} votes</span>
-                            </div>
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {report.category}
+                          </Badge>
+                          <Badge
+                            className={`text-xs ${getUrgencyColor(
+                              report.urgency
+                            )}`}
+                          >
+                            {report.urgency}
+                          </Badge>
+                          <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+                            <Users className="h-3 w-3" />
+                            <span>{report.upvotes.length} votes</span>
                           </div>
-                          <h3 className="font-medium mb-1">{report.title}</h3>
-                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                        </div>
+
+                        <div>
+                          <h3 className="font-medium mb-1 text-sm md:text-base">
+                            {report.title}
+                          </h3>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
                             {report.description}
                           </p>
-                          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                            <div className="flex items-center space-x-1">
-                              <MapPin className="h-3 w-3" />
-                              <span className="truncate max-w-32">
-                                {report.address}
-                              </span>
-                            </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-muted-foreground">
+                          <div className="flex items-center space-x-1">
+                            <MapPin className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{report.address}</span>
+                          </div>
+                          <div className="flex items-center justify-between sm:justify-start sm:space-x-4">
                             <span>by {report.reportedBy.name}</span>
                             <div className="flex items-center space-x-1">
                               <Clock className="h-3 w-3" />
                               <span>{formatDate(report.createdAt)}</span>
                             </div>
                           </div>
-                          {report.media.length > 0 && (
-                            <div className="flex items-center space-x-2 mt-2">
-                              <Camera className="h-3 w-3" />
-                              <span className="text-xs text-muted-foreground">
-                                {report.media.length} photo(s) attached
-                              </span>
-                            </div>
-                          )}
+                        </div>
+
+                        {report.media.length > 0 && (
+                          <div className="flex items-center space-x-2">
+                            <Camera className="h-3 w-3" />
+                            <span className="text-xs text-muted-foreground">
+                              {report.media.length} photo(s) attached
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Mobile view button */}
+                        <div className="lg:hidden pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                          >
+                            <Eye className="h-3 w-3 mr-2" />
+                            View & Verify Report
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -451,165 +657,33 @@ export const VerificationHub = () => {
           </Card>
         </div>
 
+        {/* Desktop Verification Panel */}
         {selectedReport && (
-          <div className="space-y-4">
+          <div className="hidden lg:block space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Verify Report</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Badge variant="outline">{selectedReport.category}</Badge>
-                    <Badge className={getUrgencyColor(selectedReport.urgency)}>
-                      {selectedReport.urgency}
-                    </Badge>
-                  </div>
-                  <h4 className="font-medium mb-2">{selectedReport.title}</h4>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedReport.description}
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <h4 className="font-medium">Location</h4>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedReport.address}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Coordinates: {formatLocation(selectedReport.location)}
-                  </p>
-                </div>
-
-                {selectedReport.media.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Attached Media</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {selectedReport.media.map((mediaUrl, index) => (
-                        <div
-                          key={index}
-                          className="aspect-square bg-muted rounded-lg flex items-center justify-center relative overflow-hidden"
-                        >
-                          {mediaUrl.toLowerCase().includes('image') ||
-                          mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                            <img
-                              src={mediaUrl}
-                              alt={`Report media ${index + 1}`}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                target.nextElementSibling!.classList.remove(
-                                  'hidden'
-                                );
-                              }}
-                            />
-                          ) : null}
-                          <Camera className="h-6 w-6 text-muted-foreground hidden" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Severity Assessment
-                  </label>
-                  <Select value={severity} onValueChange={setSeverity}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Rate severity (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1 - Minor issue</SelectItem>
-                      <SelectItem value="2">2 - Moderate</SelectItem>
-                      <SelectItem value="3">3 - Significant</SelectItem>
-                      <SelectItem value="4">4 - Major problem</SelectItem>
-                      <SelectItem value="5">5 - Critical/Emergency</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Verification Notes
-                    <span className="text-red-500 ml-1">*</span>
-                    <span className="text-xs text-muted-foreground ml-1">
-                      (Required for rejection)
-                    </span>
-                  </label>
-                  <Textarea
-                    placeholder="Add your verification notes, additional observations, or context..."
-                    value={verificationNotes}
-                    onChange={(e) => setVerificationNotes(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="flex space-x-2">
-                  <Button
-                    className="flex-1"
-                    onClick={() => handleVerification('verify')}
-                    disabled={submitting}
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    {submitting ? 'Processing...' : 'Verify (+10 pts)'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => handleVerification('reject')}
-                    disabled={submitting}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    {submitting ? 'Processing...' : 'Reject (+5 pts)'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Report Info</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm">
-                  <strong>Reported by:</strong> {selectedReport.reportedBy.name}
-                </p>
-                <p className="text-sm">
-                  <strong>Date:</strong> {formatDate(selectedReport.createdAt)}
-                </p>
-                <p className="text-sm">
-                  <strong>Community votes:</strong>{' '}
-                  {selectedReport.upvotes.length}
-                </p>
-                <p className="text-sm">
-                  <strong>Comments:</strong> {selectedReport.comments.length}
-                </p>
-                <div className="pt-2 space-y-2">
-                  <Button variant="outline" size="sm" className="w-full">
-                    <MapPin className="h-3 w-3 mr-2" />
-                    View on Map
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      const comment = prompt('Add a comment:');
-                      if (comment?.trim()) {
-                        addComment(selectedReport._id, comment.trim());
-                      }
-                    }}
-                  >
-                    Add Comment
-                  </Button>
-                </div>
+              <CardContent>
+                <VerificationPanel />
               </CardContent>
             </Card>
           </div>
         )}
       </div>
+
+      {/* Mobile Verification Sheet */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="bottom" className="h-[90vh] overflow-y-auto">
+          <SheetHeader className="text-left mb-4">
+            <SheetTitle>Verify Report</SheetTitle>
+            <SheetDescription>
+              Review and verify this community report
+            </SheetDescription>
+          </SheetHeader>
+          <VerificationPanel />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
